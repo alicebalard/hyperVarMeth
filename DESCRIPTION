@@ -1,0 +1,25 @@
+Package: hyperVarMeth
+Type: Package
+Title: Hypervariable CpG Detection Algorithm (hvCpG)
+Version: 0.1.0
+Authors@R: 
+    person("Alice", "Balard", email = "alice.cam.balard@gmail.com", role = c("aut", "cre"))
+Description: Implements batched HDF5-based detection of hypervariable CpG sites 
+    across tissues or datasets. Supports parallel processing and automated 
+    alpha-parameter optimization per CpG.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 4.1)
+Imports:
+    dplyr,
+    magrittr,
+    rhdf5,
+    parallel,
+    stats,
+    utils
+Suggests:
+    testthat (>= 3.0.0)
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Config/testthat/edition: 3
