@@ -1,0 +1,100 @@
+---
+title: "Minimal tissue variation comparion example"
+author: "Alice Balard"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Minimal hvCpG Example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+eval = TRUE,
+message = FALSE,
+warning = FALSE,
+echo = TRUE,
+fig.align = "center",
+fig.width = 12, # base width in inches
+fig.height = 6,
+out.width = "100%" # make the figure scale to container width
+)
+
+library(devtools)
+devtools::load_all()
+library(hyperVarMeth)
+library(ggplot2)
+```
+
+## 1. Create a mock methylation dataset
+
+```{r}
+mock <- create_mock_hvCpG_data()
+```
+
+This creates a small mock dataset with a few CpGs, samples, and datasets for testing.
+
+## 2. Prepare data
+
+```{r}
+prep <- prepData("mock", dirname(mock$metadata))
+str(prep)
+```
+
+## 3. Run the tissue variability analysis 
+```{r}
+res <- runAndSave_tissueAnalysis(
+  analysis = "mock",
+  cpg_names_vec = prep$cpg_names_all,
+  resultDir = "tmp",
+  NCORES = 1,
+  p1 = 0.9,
+  batch_size = 20,
+  dataDir = dirname(mock$metadata),
+  skipsave = TRUE
+)
+
+## Compute boxplot stats manually (useful for gigantic matrices!)
+library(matrixStats)
+
+compute_box_stats_vectorized <- function(mat) {
+  # Column-wise quantiles
+  q1 <- colQuantiles(mat, probs = 0.25, na.rm = TRUE)
+  med <- colQuantiles(mat, probs = 0.5, na.rm = TRUE)
+  q3 <- colQuantiles(mat, probs = 0.75, na.rm = TRUE)
+  
+  iqr <- q3 - q1
+  
+  # Whiskers
+  min_vals <- colMins(mat, na.rm = TRUE)
+  max_vals <- colMaxs(mat, na.rm = TRUE)
+  
+  whisker_lower <- pmax(min_vals, q1 - 1.5*iqr)
+  whisker_upper <- pmin(max_vals, q3 + 1.5*iqr)
+  
+  # Combine into data.frame
+  data.frame(
+    ymin = whisker_lower,
+    lower = q1,
+    middle = med,
+    upper = q3,
+    ymax = whisker_upper,
+    dataset = colnames(mat)
+  )
+}
+
+box_stats <- compute_box_stats_vectorized(res)
+head(box_stats)
+
+## Plot
+ggplot(box_stats, aes(x = dataset, 
+                      ymin = ymin, 
+                      lower = lower, 
+                      middle = middle, 
+                      upper = upper, 
+                      ymax = ymax)) +
+  geom_boxplot(stat = "identity", fill = "skyblue", color = "black") +
+  theme_minimal(base_size = 14) +
+  labs(title = "Manual Boxplot per Dataset", y = "Value", x = "Dataset")
+```
+

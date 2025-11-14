@@ -4,10 +4,17 @@
 \alias{getLogPhv_oneCpG_byTissue}
 \title{Compute log posterior probability of variability per dataset (CpG-level)}
 \usage{
-getLogPhv_oneCpG_byTissue(Mdf, metadata, dataset_groups, ds_params, p1)
+getLogPhv_oneCpG_byTissue(
+  Mdf,
+  metadata,
+  dataset_groups,
+  ds_params,
+  p1,
+  sample_n = 3L
+)
 }
 \arguments{
-\item{Mdf}{Numeric matrix (samples x 1 CpG). Methylation values for a single CpG.}
+\item{Mdf}{Numeric matrix (1 CpG x samples). Methylation values for a single CpG.}
 
 \item{metadata}{Data frame containing \code{sample} and \code{dataset} columns.}
 
@@ -17,14 +24,16 @@ getLogPhv_oneCpG_byTissue(Mdf, metadata, dataset_groups, ds_params, p1)
 columns \code{sd0}, \code{sd1}, and rownames corresponding to dataset names.}
 
 \item{p1}{Numeric scalars: True positive rate.}
+
+\item{sample_n}{integer number of individuals to sample per dataset (default 3).}
 }
 \value{
 A named numeric vector giving the log posterior probability (\code{log(Phv|Dk)})
 for each dataset where the CpG has valid data.
 }
 \description{
-For a given CpG, computes the \strong{log posterior probability} that it belongs to
-the \emph{variable} (hypervariable) state vs the \emph{stable} state, separately for each dataset.
-Within each dataset, only 3 random individuals are sampled to ensure comparability
+For a given CpG, computes the \strong{log posterior probability} that it is
+\emph{hypervariable}, separately for each dataset.
+Within each dataset, only N (default 3) random individuals are sampled to ensure comparability
 across datasets with differing numbers of samples.
 }

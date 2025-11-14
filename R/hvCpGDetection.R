@@ -2,63 +2,6 @@
 ## Alice Balard
 ## Last major update Nov 2025
 
-#' Prepare input data for hvCpG analysis
-#'
-#' This function loads the metadata, dataset-level parameters, and CpG names
-#' required to run the hvCpG detection algorithm.
-#'
-#' @param analysis Character string. Name of the analysis.
-#'   If it contains `"MariasarraysREDUCED"`, a special directory structure is expected.
-#' @param dataDir Character string. Path to the directory containing input data files.
-#'   Should contain `sample_metadata.tsv`, `all_medsd_lambda.tsv`, and an HDF5 matrix file.
-#' @param subsetMetadata Logical or data frame. If `FALSE` (default), the full metadata
-#'   is used. Otherwise, a subset of the metadata can be provided to restrict
-#'   the analysis to specific samples or datasets.
-#'
-#' @return A named list with the following elements:
-#'   \describe{
-#'     \item{metadata}{Data frame containing `sample` and `dataset` columns.}
-#'     \item{medsd_lambdas}{Data frame containing dataset-level parameters in
-#'       `dataset`, `median_sd`, and `lambda` columns.}
-#'     \item{cpg_names_all}{Character vector of CpG names (columns in the HDF5 matrix).}
-#'     \item{h5file}{Character string with the path to the HDF5 file containing the methylation matrix (samples x CpG names).}
-#'   }
-#'
-#' @export
-#'
-#' @importFrom rhdf5 h5read
-#' @importFrom utils read.table
-prepData <- function(analysis, dataDir, subsetMetadata = FALSE) {
-  if (grepl("MariasarraysREDUCED", analysis)) {
-    x <- sub("MariasarraysREDUCED", "", analysis)
-    basepath <- file.path("/home/alice/arraysh5_reducedMimicAtlas", x)
-    metapath <- file.path(basepath, "all_metadata.tsv")
-    if (!file.exists(metapath)) {
-      stop("Run 03_prepDatasetsMaria/S02.prepare_REDUCED_arrays_mimicAtlas.py")
-    }
-    metadata <- read.table(metapath, sep = "\t", header = TRUE)
-    medsd_lambdas <- read.table(file.path(basepath, "all_medsd_lambda.tsv"), sep = "\t", header = TRUE)
-    cpg_names_all <- h5read(file.path(basepath, "all_scaled_matrix.h5"), "cpg_names")
-    h5file <- file.path(basepath, "all_scaled_matrix.h5")
-  } else {
-    metadata <- read.table(file.path(dataDir, "sample_metadata.tsv"), sep = "\t", header = TRUE)
-    medsd_lambdas <- read.table(file.path(dataDir, "all_medsd_lambda.tsv"), sep = "\t", header = TRUE)
-    cpg_names_all <- h5read(file.path(dataDir, "all_matrix_noscale.h5"), "cpg_names")
-    h5file <- file.path(dataDir, "all_matrix_noscale.h5")
-  }
-  ## Possible subset of samples or datasets
-  if (!isFALSE(subsetMetadata)) {
-    message("The algorithm runs on a subset of metadata")
-    metadata = subsetMetadata
-  }
-  return(list(
-    metadata = metadata,
-    medsd_lambdas = medsd_lambdas,
-    cpg_names_all = cpg_names_all,
-    h5file = h5file
-  ))
-}
-
 #' Compute log-likelihood for one CpG across all datasets
 #'
 #' Calculates the overall log-likelihood of observing methylation values
@@ -195,12 +138,12 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
   medsd_lambdas  <- prep$medsd_lambdas
 
   ## Precompute dataset-level parameters
-  ds_params = medsd_lambdas %>%
+  ds_params <- medsd_lambdas %>%
     dplyr::select(dataset, median_sd, lambda) %>%
     dplyr::mutate(sd0 = pmax(median_sd, 1e-4),
                   sd1 = pmax(lambda * median_sd, 1e-4)) %>%
     as.data.frame()
-  rownames(ds_params) = ds_params$dataset
+  rownames(ds_params) <- ds_params$dataset
 
   ## Build a list of row indices grouped by dataset
   dataset_groups <- split(seq_len(nrow(metadata)), metadata$dataset)
@@ -214,8 +157,8 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
     stop("Some CpG names not found in HDF5: ", paste(cpg_names_vec[is.na(cpg_indices)], collapse = ", "))
   }
 
-  # Container for results
-  all_results <- vector("list", length(cpg_indices))
+  # Initialize result vector (guaranteed correct length)
+  all_results_vec <- rep(NA_real_, length(cpg_indices))
 
   # Split into batches
   batches <- split(cpg_indices, ceiling(seq_along(cpg_indices) / batch_size))
@@ -226,52 +169,100 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
       b, length(batches), length(batches[[b]]), Sys.time()
     ))
 
-    # Load block of matrix (samples x CpGs) with rhdf5::h5read direct slice
     row_batches <- batches[[b]]
+
+    # Skip empty batch
+    if (length(row_batches) == 0) next
+
+    # Load block of matrix (samples x CpGs)
     M_batch <- h5read(
       file = h5file,
       name = "matrix",
       index = list(row_batches, NULL)  # rows = subset of CpGs, columns = all samples
     )
 
-    # Assign dimnames
-    rownames(M_batch) <- cpg_names_all[row_batches]  # rows = CpGs
-    colnames(M_batch) <- samples                     # columns = sample
+    # Force to matrix safely
+    M_batch <- as.matrix(M_batch)  # converts vector, matrix, or array into proper 2D matrix
 
-    # Reorder samples to match metadata (in case it's not already)
+    if (nrow(M_batch) != length(row_batches) || ncol(M_batch) != length(samples)) {
+      stop(sprintf("Matrix shape mismatch: expected %d x %d, got %d x %d",
+                   length(row_batches), length(samples), nrow(M_batch), ncol(M_batch)))
+    }
+
+    # Assign dimnames
+    rownames(M_batch) <- cpg_names_all[row_batches]
+    colnames(M_batch) <- samples
+
+    # Reorder samples to match metadata
     M_batch <- M_batch[, metadata$sample, drop = FALSE]
 
     sample_to_dataset <- setNames(metadata$dataset, metadata$sample)
 
-    # Split CpGs into chunks (not one per worker)
-    idx_split <- split(seq_len(nrow(M_batch)), cut(seq_len(nrow(M_batch)), NCORES, labels = FALSE))
+    # Split CpGs into chunks (not one per worker) -- SAFELY
+    nrows <- nrow(M_batch)
+    if (is.null(nrows) || nrows == 0) {
+      # nothing to process in this batch
+      next
+    }
+
+    if (is.na(NCORES) || NCORES < 1) {
+      message("⚠️ Invalid NCORES (", NCORES, ") — defaulting to 1.")
+      NCORES <- 1
+    }
+
+    if (is.null(nrows) || nrows == 0) {
+      next  # nothing to process
+    }
+
+    if (nrows == 1) {
+      idx_split <- list(1L)
+    } else {
+      NCORES_use <- min(as.integer(NCORES), as.integer(nrows))
+      if (is.na(NCORES_use) || NCORES_use < 1) {
+        message("⚠️ Invalid NCORES_use (", NCORES_use, ") — forcing to 1.")
+        NCORES_use <- 1L
+      }
+
+      if (nrows <= 1L || NCORES_use <= 1L) {
+        # Single-row or single-core: one group only
+        idx_split <- list(seq_len(nrows))
+      } else {
+        # Safely compute breaks so cut() always has valid range
+        breaks_vec <- seq(0.5, nrows + 0.5, length.out = NCORES_use + 1L)
+        idx_split <- split(
+          seq_len(nrows),
+          cut(seq_len(nrows), breaks = breaks_vec, labels = FALSE, include.lowest = TRUE)
+        )
+      }
+    }
 
     # Run in parallel over chunks
     chunk_results <- mclapply(idx_split, function(idx) {
       sapply(idx, function(i) {
-        Mdf <- M_batch[i, , drop = FALSE] ## Mdf shape is [1 × Samples] i.e. a row vector
+        Mdf <- M_batch[i, , drop = FALSE]
 
-        ## Require at least Nds datasets with data
-        datasets_present <- unique(sample_to_dataset[colnames(Mdf[!is.na(Mdf), ])])
+        # Require at least Nds datasets with data
+        datasets_present <- unique(sample_to_dataset[colnames(Mdf)[!is.na(Mdf)]])
         if (length(datasets_present) < Nds) return(NA_real_)
 
-        res <- tryCatch(
-          runOptim1CpG_gridrefine(Mdf = Mdf, metadata = metadata, dataset_groups = dataset_groups,
+        tryCatch(
+          runOptim1CpG_gridrefine(Mdf = Mdf, metadata = metadata,
+                                  dataset_groups = dataset_groups,
                                   ds_params = ds_params, p0 = p0, p1 = p1),
           error = function(e) NA_real_
         )
-        return(res)
       })
     }, mc.cores = NCORES)
 
     batch_results <- unlist(chunk_results, use.names = FALSE)
 
-    # Store results (original positions)
-    all_results[match(batches[[b]], cpg_indices)] <- batch_results
+    # Store results in correct positions
+    pos_in_all <- match(row_batches, cpg_indices)
+    all_results_vec[pos_in_all] <- batch_results
   }
 
   # Build final matrix
-  my_matrix <- matrix(unlist(all_results), ncol = 1)
+  my_matrix <- matrix(all_results_vec, ncol = 1)
   rownames(my_matrix) <- cpg_names_vec
   colnames(my_matrix) <- "alpha"
 

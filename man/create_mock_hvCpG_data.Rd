@@ -30,7 +30,7 @@ Invisibly, a list of paths and simulated CpG names.
 Simulates a small HDF5 methylation matrix and per-dataset statistics
 that mimic the logic used in the WGBS Atlas preprocessing pipeline:
 \itemize{
-\item simulate per-sample beta values with random CpG-level noise,
+\item simulate per-sample beta values with skew toward 0 and 1,
 \item compute per-dataset median row SDs,
 \item compute lambda = 95th percentile of row SDs / median SD.
 }

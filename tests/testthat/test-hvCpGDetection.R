@@ -1,45 +1,110 @@
-####################################
-######### Create mock data #########
-####################################
-
-metadata <- data.frame(
-  sample  = paste0("S", 1:6),
-  dataset = rep(c("Tissue1", "Tissue2"), each = 3)
-)
-
-# CpG matrix: 6 samples × 2 CpGs
-M_matrix <- matrix(
-  c(0, 0, 0, 0.5, 0.1, 0.8,
-    0.05, 0.1, 0.1, 0.6, 0.85, 0.9),
-  nrow = 6, ncol = 2,
-  dimnames = list(metadata$sample, c("cg001", "cg002"))
-)
-
-ds_params <- data.frame(
-  dataset = c("Tissue1", "Tissue2"),
-  median_sd = c(0.05, 0.1),
-  lambda = c(2, 2)
-)
-rownames(ds_params) <- ds_params$dataset
-ds_params <- ds_params %>%
-  dplyr::mutate(sd0 = median_sd, sd1 = lambda * median_sd)
-dataset_groups <- split(seq_len(nrow(metadata)), metadata$dataset)
+library(testthat)
+library(hyperVarMeth)  # load your package namespace (Ctrl - shift - L to load_all during dvp)
 
 #################################
 ######### Perform tests #########
 #################################
 
-test_that("getLogPhv_oneCpG_byTissue returns named non-empty vector", {
+test_that("prepData loads mock data correctly", {
+  mock <- hyperVarMeth::create_mock_hvCpG_data()
+  prep <- prepData(analysis = "mock", dataDir = dirname(mock$metadata))
 
-  Mdf <- M_matrix[, "cg001", drop = FALSE]
-  res <- getLogPhv_oneCpG_byTissue(
-    Mdf = Mdf,
-    metadata = metadata,
-    dataset_groups = dataset_groups,
-    ds_params = ds_params,
-    p1 = 0.65
+  expect_type(prep, "list")
+  expect_true(all(c("metadata", "medsd_lambdas", "cpg_names_all", "h5file") %in% names(prep)))
+  expect_equal(nrow(prep$metadata), 12)  # 3 datasets × 4 samples
+  expect_true(file.exists(prep$h5file))
+})
+
+test_that("getLogLik_oneCpG_optimized_fast computes log-likelihood", {
+  mock <- hyperVarMeth::create_mock_hvCpG_data()
+  prep <- prepData("mock", dirname(mock$metadata))
+
+  ds_groups <- split(seq_len(nrow(prep$metadata)), prep$metadata$dataset)
+  ds_params <- data.frame(
+    sd0 = rep(0.1, 3),
+    sd1 = rep(0.2, 3),
+    row.names = unique(prep$metadata$dataset)
   )
 
-  expect_true(all(names(res) %in% metadata$dataset))
-  expect_false(all(is.na(res)))  # should produce real numbers
+  Mdf <- matrix(runif(12), nrow = 1)
+  loglik <- getLogLik_oneCpG_optimized_fast(Mdf, prep$metadata, ds_groups, ds_params, p0 = 0.9, p1 = 0.9, alpha = 0.5)
+
+  expect_type(loglik, "double")
+  expect_true(is.finite(loglik))
 })
+
+test_that("runOptim1CpG_gridrefine returns alpha between 0 and 1", {
+  mock <- hyperVarMeth::create_mock_hvCpG_data()
+  prep <- prepData("mock", dirname(mock$metadata))
+
+  ds_groups <- split(seq_len(nrow(prep$metadata)), prep$metadata$dataset)
+  ds_params <- data.frame(
+    sd0 = rep(0.1, 3),
+    sd1 = rep(0.2, 3),
+    row.names = unique(prep$metadata$dataset)
+  )
+
+  Mdf <- matrix(runif(12), nrow = 1)
+  alpha <- runOptim1CpG_gridrefine(Mdf, prep$metadata, ds_groups, ds_params, p0 = 0.9, p1 = 0.9)
+
+  expect_true(alpha >= 0 && alpha <= 1)
+})
+
+test_that("getAllOptimAlpha_parallel_batch_fast returns a matrix with correct dimensions", {
+  mock <- hyperVarMeth::create_mock_hvCpG_data()
+  prep <- prepData("mock", dirname(mock$metadata))
+
+  result <- getAllOptimAlpha_parallel_batch_fast(
+    cpg_names_vec = prep$cpg_names_all[1:10],
+    NCORES = 2,
+    p0 = 0.9, p1 = 0.9,
+    prep = prep,
+    batch_size = 5,
+    Nds = 3
+  )
+
+  expect_true(is.matrix(result))
+  expect_equal(dim(result), c(length(prep$cpg_names_all[1:10]), 1))
+  expect_equal(colnames(result), "alpha")
+})
+
+test_that("runAndSave_fast runs and saves results", {
+  mock <- hyperVarMeth::create_mock_hvCpG_data()
+  prep <- prepData("mock", dirname(mock$metadata))
+
+  tmp_dir <- tempdir()
+  result <- runAndSave_fast(
+    dataDir = "mock_data",
+    analysis = "mock",
+    cpg_names_vec = prep$cpg_names_all,
+    resultDir = tmp_dir,
+    NCORES = 1,
+    p0 = 0.9,
+    p1 = 0.9,
+    skipsave = FALSE
+  )
+
+  expect_true(is.matrix(result))
+  expect_equal(nrow(result), length(prep$cpg_names_all))
+  expect_true(file.exists(file.path(tmp_dir, grep("results_mock", list.files(tmp_dir), value = TRUE))))
+})
+
+
+############
+library(hyperVarMeth)
+
+mock <- hyperVarMeth::create_mock_hvCpG_data()
+prep <- prepData("mock", dirname(mock$metadata))
+
+result <- runAndSave_fast(
+  dataDir = "mock_data",
+  analysis = "mock",
+  cpg_names_vec = prep$cpg_names_all,
+  resultDir = "tmp",
+  NCORES = 1,
+  p0 = 0.9,
+  p1 = 0.9,
+  skipsave = TRUE
+)
+
+hist(result)
