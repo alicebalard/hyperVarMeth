@@ -206,7 +206,7 @@ getALL_LogPhv_oneCpG_byTissue_batch <- function(
       mc.cores = NCORES_use
     )
 
-    ## chunk_results is a list of matrices (each n_rows_in_chunk × n_datasets)
+    ## chunk_results is a list of matrices (each n_rows_in_chunk X n_datasets)
     batch_combined <- do.call(rbind, chunk_results)
 
     ## ensure matching rownames AFTER rbind
@@ -221,7 +221,7 @@ getALL_LogPhv_oneCpG_byTissue_batch <- function(
 
 #' Run and save tissue-level hvCpG log-probabilities
 #'
-#' Wrapper to compute and (optionally) save the CpG × dataset matrix of log(Phv|Dk).
+#' Wrapper to compute and (optionally) save the CpG X dataset matrix of log(Phv|Dk).
 #' Returns the matrix invisibly.
 #'
 #' @param analysis Character string. Name of the analysis.
