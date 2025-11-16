@@ -1,2 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+
+^mock_data/
+.*\.h5$
+.*\.tsv$
