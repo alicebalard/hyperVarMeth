@@ -1,5 +1,5 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
-^tests/testthat/mock_data/all_matrix_noscale\.h5$
+^tests/testthat/mock_data/.*\.h5$
 ^tests/testthat/Rplots\.pdf$
-^vignettes/mock_data/all_matrix_noscale\.h5$
+^vignettes/mock_data/.*\.h5$
