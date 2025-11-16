@@ -1,6 +1,7 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 
-^mock_data/
-.*\.h5$
-.*\.tsv$
+./tests/testthat/mock_data/all_matrix_noscale.h5
+./tests/testthat/Rplots.pdf
+
+./vignettes/mock_data/all_matrix_noscale.h5
