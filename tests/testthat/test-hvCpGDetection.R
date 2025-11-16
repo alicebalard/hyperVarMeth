@@ -11,7 +11,7 @@ test_that("prepData loads mock data correctly", {
 
   expect_type(prep, "list")
   expect_true(all(c("metadata", "medsd_lambdas", "cpg_names_all", "h5file") %in% names(prep)))
-  expect_equal(nrow(prep$metadata), 12)  # 3 datasets × 4 samples
+  expect_equal(nrow(prep$metadata), 12)  # 3 datasets x 4 samples
   expect_true(file.exists(prep$h5file))
 })
 
