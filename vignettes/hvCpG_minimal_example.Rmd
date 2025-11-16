@@ -3,9 +3,9 @@ title: "Minimal hvCpG detection example"
 author: "Alice Balard"
 output: rmarkdown::html_vignette
 vignette: >
-%\VignetteIndexEntry{Minimal hvCpG Example}
-%\VignetteEngine{knitr::rmarkdown}
-%\VignetteEncoding{UTF-8}
+  %\VignetteIndexEntry{Minimal hvCpG Example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
   
   
@@ -142,7 +142,6 @@ ggplot(mat_df[mat_df$CpG %in% var,], aes(x=Sample, y = Beta))+
 ```{r}
 list.files(tmp_dir, pattern = "results_mock")
 ```
-
 
 ## Notes
 

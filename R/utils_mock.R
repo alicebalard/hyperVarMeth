@@ -50,14 +50,22 @@ create_mock_hvCpG_data <- function(
   high_idx <- (n_cpgs - n_high + 1):n_cpgs
   normal_idx <- setdiff(seq_len(n_cpgs), c(low_idx, high_idx))
 
-  n_draws <- 10        # number of Bernoulli draws per CpG (i.e. coverage)
+  n_draws <- 10        # number of Bernoulli draws per CpG (i.e. coverage 10X)
   bias_prob <- c(0.1, 0.9)
 
   for (i in seq_len(n_datasets)) {
     sample_idx <- which(datasets == paste0("DS", i))
 
-    # dataset-specific variability for normal CpGs
-    if (i == 1) noise_sd <- runif(1, 0.02, 0.03) else noise_sd <- runif(1, 0.05, 0.25)
+    if (i == 1) {
+      # DS1: very stable CpGs
+      noise_sd <- runif(1, 0.005, 0.010)
+    } else if (i == 2) {
+      # DS2: highly variable CpGs
+      noise_sd <- runif(1, 0.20, 0.35)
+    } else {
+      # DS3+ : original behaviour
+      noise_sd <- runif(1, 0.05, 0.25)
+    }
 
     for (j in sample_idx) {
       # Low CpGs: biased Bernoulli means near 0

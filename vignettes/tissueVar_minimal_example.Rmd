@@ -53,7 +53,10 @@ res <- runAndSave_tissueAnalysis(
   dataDir = dirname(mock$metadata),
   skipsave = TRUE
 )
+```
 
+## 4. Compute stats & plot for boxplot
+```{r}
 ## Compute boxplot stats manually (useful for gigantic matrices!)
 library(matrixStats)
 
@@ -96,5 +99,22 @@ ggplot(box_stats, aes(x = dataset,
   geom_boxplot(stat = "identity", fill = "skyblue", color = "black") +
   theme_minimal(base_size = 14) +
   labs(title = "Manual Boxplot per Dataset", y = "Value", x = "Dataset")
+```
+
+## 5. Compute & plot density for each dataset
+```{r}
+library(tidyr)
+library(dplyr)
+library(viridis)
+# Reshape only these three columns
+plot_df <- res %>% as.data.frame() %>%
+  pivot_longer(everything(), names_to = "dataset", values_to = "value")
+
+# Combine histograms
+ggplot(plot_df, aes(x = value, group = dataset, fill = dataset)) +
+  geom_density(bins = 50, alpha = .5) +
+  theme_minimal(base_size = 14) +
+  scale_fill_viridis_d() +
+  xlab("log posterior probability that the CpG is hypervariable in dataset k")
 ```
 
