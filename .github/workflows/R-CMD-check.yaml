@@ -37,8 +37,8 @@ jobs:
           Rscript -e "remotes::install_deps(dependencies = TRUE)"
 
       # Step 5: Run testthat tests (without devtools::test)
-      - name: Run tests
-        run: Rscript -e "if (requireNamespace('testthat', quietly = TRUE)) testthat::test_dir('tests/testthat')"
+      - name: Run R CMD check
+        run: Rscript -e "rcmdcheck::rcmdcheck(error_on = 'warning')"
 
       # Step 6: Run R CMD check
       - name: Run R CMD check
