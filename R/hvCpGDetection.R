@@ -206,7 +206,7 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
     }
 
     if (is.na(NCORES) || NCORES < 1) {
-      message("⚠️ Invalid NCORES (", NCORES, ") — defaulting to 1.")
+      message("!!Invalid NCORES (", NCORES, ") - defaulting to 1.")
       NCORES <- 1
     }
 
@@ -219,7 +219,7 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
     } else {
       NCORES_use <- min(as.integer(NCORES), as.integer(nrows))
       if (is.na(NCORES_use) || NCORES_use < 1) {
-        message("⚠️ Invalid NCORES_use (", NCORES_use, ") — forcing to 1.")
+        message("!! Invalid NCORES_use (", NCORES_use, ") - forcing to 1.")
         NCORES_use <- 1L
       }
 

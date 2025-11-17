@@ -3,11 +3,10 @@ title: "Minimal hvCpG detection example"
 author: "Alice Balard"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Minimal hvCpG Example}
+  %\VignetteIndexEntry{Minimal hvCpG detection example}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
-  
   
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
@@ -21,15 +20,16 @@ fig.height = 6,
 out.width = "100%" # make the figure scale to container width
 )
 
-library(devtools)
-devtools::load_all()
-library(hyperVarMeth)
+`%>%` <- magrittr::`%>%`
+
+# Suppress R CMD check notes for non-standard evaluation (NSE) variables
+utils::globalVariables(c("dataset", "median_sd", "lambda"))
 ```
 
 ## 1. Create a mock methylation dataset
 
 ```{r}
-mock <- create_mock_hvCpG_data()
+mock <- hyperVarMeth::create_mock_hvCpG_data()
 ```
 
 This creates a small mock dataset with a few CpGs, samples, and datasets for testing.
@@ -37,7 +37,7 @@ This creates a small mock dataset with a few CpGs, samples, and datasets for tes
 ## 2. Prepare data
 
 ```{r}
-prep <- prepData("mock", dirname(mock$metadata))
+prep <- hyperVarMeth::prepData("mock", dirname(mock$metadata))
 str(prep)
 ```
 
@@ -49,14 +49,11 @@ prep contains:
 - h5file: path to HDF5 methylation matrix
 
 ```{r}
-library(rhdf5)
-library(ggplot2)
-
 metadata <- read.table(mock$metadata, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
 h5file <- mock$h5file
 
 # Read methylation matrix from HDF5
-mat <- h5read(h5file, "matrix")
+mat <- rhdf5::h5read(h5file, "matrix")
 rownames(mat) <- mock$cpg_names
 colnames(mat) <- metadata$sample
 
@@ -67,12 +64,12 @@ cpg_sd <- apply(mat, 1, sd, na.rm = TRUE)
 mat_df <- reshape2::melt(mat, varnames = c("CpG", "Sample"), value.name = "Beta")
 mat_df <- merge(mat_df, metadata, by.x = "Sample", by.y = "sample")
 
-ggplot(mat_df, aes(x = Beta, group = dataset, fill = dataset)) +
-  geom_histogram(binwidth = 0.05, color = "black") +
-  facet_wrap(~ dataset, ncol = 3) +
-  theme_minimal(base_size = 14) +
-  theme(legend.position = "none") +
-  labs(title = "Beta-value distributions per dataset", x = "Beta", y = "Count")
+ggplot2::ggplot(mat_df, ggplot2::aes(x = Beta, group = dataset, fill = dataset)) +
+  ggplot2::geom_histogram(binwidth = 0.05, color = "black") +
+  ggplot2::facet_wrap(~ dataset, ncol = 3) +
+  ggplot2::theme_minimal(base_size = 14) +
+  ggplot2::theme(legend.position = "none") +
+  ggplot2::labs(title = "Beta-value distributions per dataset", x = "Beta", y = "Count")
 ```
 
 ## 3. Run hvCpG detection (batched + parallel)
@@ -80,13 +77,13 @@ ggplot(mat_df, aes(x = Beta, group = dataset, fill = dataset)) +
 ```{r}
 tmp_dir <- tempdir()
 
-result <- runAndSave_fast(
+result <- hyperVarMeth::runAndSave_fast(
   analysis = "mock",
   cpg_names_vec = prep$cpg_names_all,
   resultDir = tmp_dir,
   NCORES = 1,
-  p0 = 0.9,
-  p1 = 0.9,
+  p0 = 0.8,
+  p1 = 0.65,
   dataDir = dirname(mock$metadata),
   batch_size = 10, # smaller batch for mock
   skipsave = FALSE
@@ -104,13 +101,11 @@ head(result)
 You should see a matrix of CpGs (rows) and their estimated alpha values.
 
 ```{r}
-library(ggplot2)
-ggplot(result, aes(x=alpha)) +
-  geom_histogram() +
-  theme_minimal(base_size = 14)
+ggplot2::ggplot(result, ggplot2::aes(x=alpha)) +
+  ggplot2::geom_histogram() +
+  ggplot2::theme_minimal(base_size = 14)
 
 # Plot raw values for an extremely stable and an extremely variable CpGs:
-
 sta <- rownames(result)[which(result %in% min(result))[1]]
 
 idx_mid <- which.min(abs(result - 0.5))
@@ -118,25 +113,38 @@ mid <- rownames(result)[idx_mid]
 
 var <- rownames(result)[which(result %in% max(result))[1]]
 
-ggplot(mat_df[mat_df$CpG %in% sta,], aes(x=Sample, y = Beta))+
-  geom_point(aes(col=dataset), size = 3)+
-  theme_minimal(base_size = 14) +
-  coord_cartesian(ylim = c(0,1))+
-  ggtitle("a stable CpG")
+result[match(c(sta, mid,var), row.names(result)),]
 
-ggplot(mat_df[mat_df$CpG %in% mid,], aes(x=Sample, y = Beta))+
-  geom_point(aes(col=dataset), size = 3)+
-  theme_minimal(base_size = 14) +
-  coord_cartesian(ylim = c(0,1))+
-  ggtitle("a variable CpG")
-
-ggplot(mat_df[mat_df$CpG %in% var,], aes(x=Sample, y = Beta))+
-  geom_point(aes(col=dataset), size = 3)+
-  theme_minimal(base_size = 14)+
-  coord_cartesian(ylim = c(0,1))+
-  ggtitle("a hyper variable CpG")
+mat_df <- mat_df %>%
+  dplyr::filter(CpG %in% c(sta, mid,var)) %>%
+  dplyr::group_by(dataset, CpG) %>%
+  dplyr::summarise(range = max(Beta, na.rm=TRUE)-min(Beta, na.rm=TRUE),
+            sd = sd(Beta, na.rm=TRUE),
+            n = sum(!is.na(Beta)))
 ```
 
+
+```{r}
+ggplot2::ggplot(mat_df[mat_df$CpG %in% sta,], ggplot2::aes(x=dataset, y = sd))+
+  ggplot2::geom_point(ggplot2::aes(col=dataset), size = 3)+
+  ggplot2::theme_minimal(base_size = 14) +
+  ggplot2::coord_cartesian(ylim = c(0,1))+
+  ggplot2::ggtitle("a stable CpG")
+
+ggplot2::ggplot(mat_df[mat_df$CpG %in% mid,], ggplot2::aes(x=dataset, y = sd))+
+  ggplot2::geom_point(ggplot2::aes(col=dataset), size = 3)+
+  ggplot2::theme_minimal(base_size = 14) +
+  ggplot2::coord_cartesian(ylim = c(0,1))+
+  ggplot2::ggtitle("a variable CpG")
+
+ggplot2::ggplot(mat_df[mat_df$CpG %in% var,], ggplot2::aes(x=dataset, y = sd))+
+  ggplot2::geom_point(ggplot2::aes(col=dataset), size = 3)+
+  ggplot2::theme_minimal(base_size = 14)+
+  ggplot2::coord_cartesian(ylim = c(0,1))+
+  ggplot2::ggtitle("a hyper variable CpG")
+
+mat_df[mat_df$CpG %in% "cg000004",]
+```
 
 ### Confirm result file exists
 ```{r}

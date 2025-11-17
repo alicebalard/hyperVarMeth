@@ -105,8 +105,8 @@ getALL_LogPhv_oneCpG_byTissue_batch <- function(
   ## dataset params
   ds_params <- medsd_lambdas %>%
     dplyr::select(dataset, median_sd, lambda) %>%
-    dplyr::mutate(sd0 = pmax(median_sd, 1e-4),
-                  sd1 = pmax(lambda * median_sd, 1e-4)) %>%
+    dplyr::mutate(sd0 = pmax(median_sd, 0.005),
+                  sd1 = pmax(lambda * median_sd, 0.005)) %>%
     as.data.frame()
   rownames(ds_params) <- ds_params$dataset
   dataset_names <- rownames(ds_params)

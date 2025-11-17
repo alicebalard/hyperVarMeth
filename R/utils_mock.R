@@ -16,9 +16,9 @@
 #' @export
 #' @importFrom rhdf5 h5createFile h5write
 #' @importFrom utils write.table
-#' @importFrom stats rnorm runif sd quantile median
+#' @importFrom stats rnorm rbinom runif sd quantile median
 create_mock_hvCpG_data <- function(
-    outdir = "mock_data",
+    outdir = "inst/mock_data",
     n_datasets = 10,
     n_samples_per_dataset = 3,
     n_cpgs = 200,
@@ -26,12 +26,12 @@ create_mock_hvCpG_data <- function(
 ) {
   # 1. Select the true set of hypervariable CpGs
   # (10% of them)
-  # 2. For each hvCpG and for each dataset except the “stable dataset”,
+  # 2. For each hvCpG and for each dataset except the "stable dataset",
   # decide whether it is HV (prob 0.65) or stable (prob 0.35).
-  # 3. For the “fully stable dataset”, force all hvCpGs to be stable.
+  # 3. For the "fully stable dataset", force all hvCpGs to be stable.
   # 4. Use dataset-specific SD values:
-  # HV CpGs: sd ≈ 0.20–0.35
-  # Stable CpGs: sd ≈ 0.005–0.015
+  # HV CpGs: sd ~ 0.20–0.35
+  # Stable CpGs: sd ~ 0.005–0.015
 
   set.seed(seed)
   dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
@@ -47,7 +47,7 @@ create_mock_hvCpG_data <- function(
   write.table(metadata, meta_path, sep = "\t", quote = FALSE, row.names = FALSE)
 
   # -------------------------------
-  # Simulate CpG matrix (0–1 betas)
+  # Simulate CpG matrix (0-1 betas)
   # -------------------------------
   cpg_names <- paste0("cg", sprintf("%06d", seq_len(n_cpgs)))
   mat <- matrix(NA_real_, nrow = n_cpgs, ncol = length(samples),
@@ -174,7 +174,7 @@ create_mock_hvCpG_data <- function(
   rhdf5::h5write(datasets, h5_path, "sample_groups")
 
   message(sprintf(
-    "✅ Created mock hvCpG dataset in '%s' with %d datasets, %d samples, %d CpGs.",
+    "Created mock hvCpG dataset in '%s' with %d datasets, %d samples, %d CpGs.",
     normalizePath(outdir), n_datasets, length(samples), n_cpgs
   ))
 

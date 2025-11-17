@@ -3,7 +3,7 @@ title: "Minimal tissue variation comparion example"
 author: "Alice Balard"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Minimal hvCpG Example}
+  %\VignetteIndexEntry{Minimal tissue variation comparion example}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -20,16 +20,16 @@ fig.height = 6,
 out.width = "100%" # make the figure scale to container width
 )
 
-library(devtools)
-devtools::load_all()
-library(hyperVarMeth)
-library(ggplot2)
+`%>%` <- magrittr::`%>%`
+
+# Suppress R CMD check notes for non-standard evaluation (NSE) variables
+utils::globalVariables(c("dataset", "median_sd", "lambda"))
 ```
 
 ## 1. Create a mock methylation dataset
 
 ```{r}
-mock <- create_mock_hvCpG_data()
+mock <- hyperVarMeth::create_mock_hvCpG_data()
 ```
 
 This creates a small mock dataset with a few CpGs, samples, and datasets for testing.
@@ -37,13 +37,13 @@ This creates a small mock dataset with a few CpGs, samples, and datasets for tes
 ## 2. Prepare data
 
 ```{r}
-prep <- prepData("mock", dirname(mock$metadata))
+prep <- hyperVarMeth::prepData("mock", dirname(mock$metadata))
 str(prep)
 ```
 
 ## 3. Run the tissue variability analysis 
 ```{r}
-res <- runAndSave_tissueAnalysis(
+res <- hyperVarMeth::runAndSave_tissueAnalysis(
   analysis = "mock",
   cpg_names_vec = prep$cpg_names_all,
   resultDir = "tmp",
@@ -58,19 +58,18 @@ res <- runAndSave_tissueAnalysis(
 ## 4. Compute stats & plot for boxplot
 ```{r}
 ## Compute boxplot stats manually (useful for gigantic matrices!)
-library(matrixStats)
 
 compute_box_stats_vectorized <- function(mat) {
   # Column-wise quantiles
-  q1 <- colQuantiles(mat, probs = 0.25, na.rm = TRUE)
-  med <- colQuantiles(mat, probs = 0.5, na.rm = TRUE)
-  q3 <- colQuantiles(mat, probs = 0.75, na.rm = TRUE)
+  q1 <- matrixStats::colQuantiles(mat, probs = 0.25, na.rm = TRUE)
+  med <- matrixStats::colQuantiles(mat, probs = 0.5, na.rm = TRUE)
+  q3 <- matrixStats::colQuantiles(mat, probs = 0.75, na.rm = TRUE)
   
   iqr <- q3 - q1
   
   # Whiskers
-  min_vals <- colMins(mat, na.rm = TRUE)
-  max_vals <- colMaxs(mat, na.rm = TRUE)
+  min_vals <- matrixStats::colMins(mat, na.rm = TRUE)
+  max_vals <- matrixStats::colMaxs(mat, na.rm = TRUE)
   
   whisker_lower <- pmax(min_vals, q1 - 1.5*iqr)
   whisker_upper <- pmin(max_vals, q3 + 1.5*iqr)
@@ -93,34 +92,31 @@ head(box_stats)
 box_stats$dataset <- factor(box_stats$dataset, levels = box_stats$dataset)
 
 ## Plot
-ggplot(box_stats, aes(x = dataset, 
+ggplot2::ggplot(box_stats, ggplot2::aes(x = dataset, 
                       ymin = ymin, 
                       lower = lower, 
                       middle = middle, 
                       upper = upper, 
                       ymax = ymax)) +
-  geom_boxplot(stat = "identity", fill = "skyblue", color = "black") +
-  theme_minimal(base_size = 14) +
-  labs(title = "Manual Boxplot per Dataset", y = "Value", x = "Dataset")
+  ggplot2::geom_boxplot(stat = "identity", fill = "skyblue", color = "black") +
+  ggplot2::theme_minimal(base_size = 14) +
+  ggplot2::labs(title = "Manual Boxplot per Dataset", y = "Value", x = "Dataset")
 ```
 
 ## 5. Compute & plot density for each dataset
 ```{r}
-library(tidyr)
-library(dplyr)
-library(viridis)
 # Reshape only these three columns
 plot_df <- res %>% as.data.frame() %>%
-  pivot_longer(everything(), names_to = "dataset", values_to = "value")
+  tidyr::pivot_longer(everything(), names_to = "dataset", values_to = "value")
 
 ## reorder for plot
 plot_df$dataset <- factor(plot_df$dataset, levels = unique(plot_df$dataset))
 
 # Combine histograms
-ggplot(plot_df, aes(x = value, group = dataset, fill = dataset)) +
-  geom_density(bins = 50, alpha = .4) +
-  theme_minimal(base_size = 14) +
-  scale_fill_viridis_d() +
-  xlab("log posterior probability that the CpG is hypervariable in dataset k")
+ggplot2::ggplot(plot_df, ggplot2::aes(x = value, group = dataset, fill = dataset)) +
+  ggplot2::geom_density(bins = 50, alpha = .4) +
+  ggplot2::theme_minimal(base_size = 14) +
+  ggplot2::scale_fill_viridis_d() +
+  ggplot2::xlab("log posterior probability that the CpG is hypervariable in dataset k")
 ```
 

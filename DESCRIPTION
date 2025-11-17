@@ -18,8 +18,20 @@ Imports:
     parallel,
     stats,
     utils
-Suggests:
-    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Suggests: 
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    devtools,
+    ggplot2,
+    reshape2,
+    matrixStats,
+    tidyr,
+    viridis,
+    qpdf
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3
+
+

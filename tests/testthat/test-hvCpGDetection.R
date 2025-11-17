@@ -78,7 +78,7 @@ test_that("runAndSave_fast runs and saves results", {
 
   tmp_dir <- tempdir()
   result <- runAndSave_fast(
-    dataDir = "mock_data",
+    dataDir = "inst/mock_data",
     analysis = "mock",
     cpg_names_vec = prep$cpg_names_all,
     resultDir = tmp_dir,
