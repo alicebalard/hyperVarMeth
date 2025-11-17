@@ -3,3 +3,4 @@
 ^tests/testthat/mock_data/.*\.h5$
 ^tests/testthat/Rplots\.pdf$
 ^vignettes/mock_data/.*\.h5$
+^\.github$

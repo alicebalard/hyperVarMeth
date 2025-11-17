@@ -46,7 +46,7 @@ jobs:
 
       # Step 5: Run testthat tests (without devtools::test)
       - name: Run R CMD check
-        run: Rscript -e "rcmdcheck::rcmdcheck(error_on = 'warning')"
+        run: Rscript -e "rcmdcheck::rcmdcheck(args = '--no-manual', error_on = 'warning')"
 
       # Step 6: Run R CMD check
       - name: Run R CMD check
