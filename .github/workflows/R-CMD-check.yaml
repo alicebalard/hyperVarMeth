@@ -36,6 +36,14 @@ jobs:
           Rscript -e "install.packages(c('remotes','testthat','roxygen2','devtools'))"
           Rscript -e "remotes::install_deps(dependencies = TRUE)"
 
+     # Install CRAN + Bioconductor dependencies including rhdf5
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::rcmdcheck
+            bioc::rhdf5
+          needs: check
+
       # Step 5: Run testthat tests (without devtools::test)
       - name: Run R CMD check
         run: Rscript -e "rcmdcheck::rcmdcheck(error_on = 'warning')"
