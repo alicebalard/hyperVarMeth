@@ -6,7 +6,7 @@
 #'
 #' For a given CpG, computes the **log posterior probability** that it is
 #' *hypervariable*, separately for each dataset.
-#' Within each dataset, only N (default 3) random individuals are sampled to ensure comparability
+#' Within each dataset, we take the average over all sampled individuals to ensure comparability
 #' across datasets with differing numbers of samples.
 #'
 #' @param Mdf Numeric matrix (1 CpG x samples). Methylation values for a single CpG.
@@ -15,14 +15,13 @@
 #' @param ds_params Data frame with precomputed parameters per dataset:
 #'   columns `sd0`, `sd1`, and rownames corresponding to dataset names.
 #' @param p1 Numeric scalars: True positive rate.
-#' @param sample_n integer number of individuals to sample per dataset (default 3).
 #'
 #' @return A named numeric vector giving the log posterior probability (`log(Phv|Dk)`)
 #'   for each dataset where the CpG has valid data.
 #' @export
 #'
 #' @importFrom stats dnorm
-getLogPhv_oneCpG_byTissue <- function(Mdf, metadata, dataset_groups, ds_params, p1,sample_n = 3L) {
+getLogPhv_oneCpG_byTissue <- function(Mdf, metadata, dataset_groups, ds_params, p1) {
   # Must be a numeric named vector
   if (!is.numeric(Mdf))
     stop("Mdf must be a numeric vector")
@@ -50,15 +49,6 @@ getLogPhv_oneCpG_byTissue <- function(Mdf, metadata, dataset_groups, ds_params, 
       next
     }
 
-    ## Select only N individuals per dataset for comparison between datasets
-    ## creates a numeric vector of the right length, filled with NA
-    use_idx <- if (length(vals_ok) <= sample_n) {
-      seq_along(vals_ok)
-    } else {
-      sample(seq_along(vals_ok), sample_n)
-    }
-    vals_ok <- vals_ok[use_idx]
-
     ## Precompute mean
     mu <- mean(vals_ok)
 
@@ -76,7 +66,7 @@ getLogPhv_oneCpG_byTissue <- function(Mdf, metadata, dataset_groups, ds_params, 
     post <- (p_var[valid] * p1) / denom[valid]
     post <- pmin(pmax(post, 1e-12), 1 - 1e-12) ## avoid 0 and 1
 
-    out[k] <- sum(log(post))
+    out[k] <- mean(log(post)) ## take the mean out of all individuals in one dataset
   }
   return(out) # named vector of a logPr per dataset for this CpG
 }
@@ -105,7 +95,7 @@ getLogPhv_oneCpG_byTissue <- function(Mdf, metadata, dataset_groups, ds_params, 
 #' @importFrom parallel mclapply
 getALL_LogPhv_oneCpG_byTissue_batch <- function(
     cpg_names_vec, NCORES, p1, prep,
-    batch_size = 1000L, Nds = 3L, sample_n = 3L) {
+    batch_size = 1000L, Nds = 3L) {
 
   metadata       <- prep$metadata
   cpg_names_all  <- prep$cpg_names_all
@@ -195,8 +185,7 @@ getALL_LogPhv_oneCpG_byTissue_batch <- function(
             metadata = metadata,
             dataset_groups = dataset_groups,
             ds_params = ds_params,
-            p1 = p1,
-            sample_n = sample_n
+            p1 = p1
           )
           ## Ensure order matches dataset_names and return numeric vector
           res_vec[dataset_names]
@@ -206,7 +195,7 @@ getALL_LogPhv_oneCpG_byTissue_batch <- function(
       mc.cores = NCORES_use
     )
 
-    ## chunk_results is a list of matrices (each n_rows_in_chunk X n_datasets)
+    ## chunk_results is a list of matrices (each n_rows_in_chunk x n_datasets)
     batch_combined <- do.call(rbind, chunk_results)
 
     ## ensure matching rownames AFTER rbind
@@ -221,7 +210,7 @@ getALL_LogPhv_oneCpG_byTissue_batch <- function(
 
 #' Run and save tissue-level hvCpG log-probabilities
 #'
-#' Wrapper to compute and (optionally) save the CpG X dataset matrix of log(Phv|Dk).
+#' Wrapper to compute and (optionally) save the CpG × dataset matrix of log(Phv|Dk).
 #' Returns the matrix invisibly.
 #'
 #' @param analysis Character string. Name of the analysis.
@@ -246,7 +235,7 @@ getALL_LogPhv_oneCpG_byTissue_batch <- function(
 #'
 runAndSave_tissueAnalysis <- function(
     analysis, cpg_names_vec, resultDir, NCORES, p1, overwrite = FALSE, batch_size = 1000L,
-    dataDir, skipsave = FALSE, Nds = 3L, subsetMetadata = FALSE, sample_n = 3L) {
+    dataDir, skipsave = FALSE, Nds = 3L, subsetMetadata = FALSE) {
   t0 <- Sys.time()
   prep <- prepData(analysis, dataDir, subsetMetadata)
   message("Preparing the data took ", round(difftime(Sys.time(), t0, units = "secs")), " seconds")
@@ -265,7 +254,7 @@ runAndSave_tissueAnalysis <- function(
 
   result <- getALL_LogPhv_oneCpG_byTissue_batch(
     cpg_names_vec = cpg_names_vec, NCORES = NCORES, p1 = p1,
-    prep = prep, batch_size = batch_size, Nds = Nds, sample_n = sample_n
+    prep = prep, batch_size = batch_size, Nds = Nds
   )
 
   if (!skipsave) {

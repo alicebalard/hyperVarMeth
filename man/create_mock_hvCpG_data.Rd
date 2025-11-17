@@ -6,8 +6,8 @@
 \usage{
 create_mock_hvCpG_data(
   outdir = "mock_data",
-  n_datasets = 3,
-  n_samples_per_dataset = 4,
+  n_datasets = 10,
+  n_samples_per_dataset = 3,
   n_cpgs = 200,
   seed = 1234
 )

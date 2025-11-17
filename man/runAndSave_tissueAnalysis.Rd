@@ -15,8 +15,7 @@ runAndSave_tissueAnalysis(
   dataDir,
   skipsave = FALSE,
   Nds = 3L,
-  subsetMetadata = FALSE,
-  sample_n = 3L
+  subsetMetadata = FALSE
 )
 }
 \arguments{
@@ -51,6 +50,6 @@ Invisibly returns the result matrix \verb{(CpG x dataset)} of \code{log(Phv|Dk)}
 Also saves an \code{.RData} file in \code{resultDir} unless \code{skipsave = TRUE}.
 }
 \description{
-Wrapper to compute and (optionally) save the CpG X dataset matrix of log(Phv|Dk).
+Wrapper to compute and (optionally) save the CpG × dataset matrix of log(Phv|Dk).
 Returns the matrix invisibly.
 }

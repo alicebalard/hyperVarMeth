@@ -10,8 +10,7 @@ getALL_LogPhv_oneCpG_byTissue_batch(
   p1,
   prep,
   batch_size = 1000L,
-  Nds = 3L,
-  sample_n = 3L
+  Nds = 3L
 )
 }
 \arguments{

@@ -89,6 +89,9 @@ compute_box_stats_vectorized <- function(mat) {
 box_stats <- compute_box_stats_vectorized(res)
 head(box_stats)
 
+## reorder for plot
+box_stats$dataset <- factor(box_stats$dataset, levels = box_stats$dataset)
+
 ## Plot
 ggplot(box_stats, aes(x = dataset, 
                       ymin = ymin, 
@@ -110,9 +113,12 @@ library(viridis)
 plot_df <- res %>% as.data.frame() %>%
   pivot_longer(everything(), names_to = "dataset", values_to = "value")
 
+## reorder for plot
+plot_df$dataset <- factor(plot_df$dataset, levels = unique(plot_df$dataset))
+
 # Combine histograms
 ggplot(plot_df, aes(x = value, group = dataset, fill = dataset)) +
-  geom_density(bins = 50, alpha = .5) +
+  geom_density(bins = 50, alpha = .4) +
   theme_minimal(base_size = 14) +
   scale_fill_viridis_d() +
   xlab("log posterior probability that the CpG is hypervariable in dataset k")

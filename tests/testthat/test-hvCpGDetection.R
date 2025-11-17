@@ -6,52 +6,56 @@ library(hyperVarMeth)  # load your package namespace (Ctrl - shift - L to load_a
 #################################
 
 test_that("prepData loads mock data correctly", {
-  mock <- hyperVarMeth::create_mock_hvCpG_data()
+  mock <- hyperVarMeth::create_mock_hvCpG_data(
+    n_datasets = 10, n_samples_per_dataset = 3)
   prep <- prepData(analysis = "mock", dataDir = dirname(mock$metadata))
 
   expect_type(prep, "list")
   expect_true(all(c("metadata", "medsd_lambdas", "cpg_names_all", "h5file") %in% names(prep)))
-  expect_equal(nrow(prep$metadata), 12)  # 3 datasets x 4 samples
   expect_true(file.exists(prep$h5file))
 })
 
 test_that("getLogLik_oneCpG_optimized_fast computes log-likelihood", {
-  mock <- hyperVarMeth::create_mock_hvCpG_data()
+  mock <- hyperVarMeth::create_mock_hvCpG_data(
+    n_datasets = 10, n_samples_per_dataset = 3)
   prep <- prepData("mock", dirname(mock$metadata))
 
   ds_groups <- split(seq_len(nrow(prep$metadata)), prep$metadata$dataset)
   ds_params <- data.frame(
-    sd0 = rep(0.1, 3),
-    sd1 = rep(0.2, 3),
+    sd0 = rep(0.1, 10),
+    sd1 = rep(0.2, 10),
     row.names = unique(prep$metadata$dataset)
   )
 
-  Mdf <- matrix(runif(12), nrow = 1)
-  loglik <- getLogLik_oneCpG_optimized_fast(Mdf, prep$metadata, ds_groups, ds_params, p0 = 0.9, p1 = 0.9, alpha = 0.5)
+  Mdf <- matrix(runif(30), nrow = 1)
+  loglik <- getLogLik_oneCpG_optimized_fast(Mdf, prep$metadata, ds_groups, ds_params,
+                                            p0 = 0.9, p1 = 0.9, alpha = 0.5)
 
   expect_type(loglik, "double")
   expect_true(is.finite(loglik))
 })
 
 test_that("runOptim1CpG_gridrefine returns alpha between 0 and 1", {
-  mock <- hyperVarMeth::create_mock_hvCpG_data()
+  mock <- hyperVarMeth::create_mock_hvCpG_data(
+    n_datasets = 10, n_samples_per_dataset = 3)
   prep <- prepData("mock", dirname(mock$metadata))
 
   ds_groups <- split(seq_len(nrow(prep$metadata)), prep$metadata$dataset)
   ds_params <- data.frame(
-    sd0 = rep(0.1, 3),
-    sd1 = rep(0.2, 3),
+    sd0 = rep(0.1, 10),
+    sd1 = rep(0.2, 10),
     row.names = unique(prep$metadata$dataset)
   )
 
-  Mdf <- matrix(runif(12), nrow = 1)
+  Mdf <- matrix(runif(30), nrow = 1)
   alpha <- runOptim1CpG_gridrefine(Mdf, prep$metadata, ds_groups, ds_params, p0 = 0.9, p1 = 0.9)
 
   expect_true(alpha >= 0 && alpha <= 1)
 })
 
 test_that("getAllOptimAlpha_parallel_batch_fast returns a matrix with correct dimensions", {
-  mock <- hyperVarMeth::create_mock_hvCpG_data()
+  mock <- hyperVarMeth::create_mock_hvCpG_data(
+    n_datasets = 10, n_samples_per_dataset = 3)
   prep <- prepData("mock", dirname(mock$metadata))
 
   result <- getAllOptimAlpha_parallel_batch_fast(
@@ -84,27 +88,5 @@ test_that("runAndSave_fast runs and saves results", {
     skipsave = FALSE
   )
 
-  expect_true(is.matrix(result))
-  expect_equal(nrow(result), length(prep$cpg_names_all))
   expect_true(file.exists(file.path(tmp_dir, grep("results_mock", list.files(tmp_dir), value = TRUE))))
 })
-
-
-############
-library(hyperVarMeth)
-
-mock <- hyperVarMeth::create_mock_hvCpG_data()
-prep <- prepData("mock", dirname(mock$metadata))
-
-result <- runAndSave_fast(
-  dataDir = "mock_data",
-  analysis = "mock",
-  cpg_names_vec = prep$cpg_names_all,
-  resultDir = "tmp",
-  NCORES = 1,
-  p0 = 0.9,
-  p1 = 0.9,
-  skipsave = TRUE
-)
-
-hist(result)

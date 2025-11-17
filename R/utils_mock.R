@@ -19,11 +19,20 @@
 #' @importFrom stats rnorm runif sd quantile median
 create_mock_hvCpG_data <- function(
     outdir = "mock_data",
-    n_datasets = 3,
-    n_samples_per_dataset = 4,
+    n_datasets = 10,
+    n_samples_per_dataset = 3,
     n_cpgs = 200,
     seed = 1234
 ) {
+  # 1. Select the true set of hypervariable CpGs
+  # (10% of them)
+  # 2. For each hvCpG and for each dataset except the “stable dataset”,
+  # decide whether it is HV (prob 0.65) or stable (prob 0.35).
+  # 3. For the “fully stable dataset”, force all hvCpGs to be stable.
+  # 4. Use dataset-specific SD values:
+  # HV CpGs: sd ≈ 0.20–0.35
+  # Stable CpGs: sd ≈ 0.005–0.015
+
   set.seed(seed)
   dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
@@ -33,6 +42,7 @@ create_mock_hvCpG_data <- function(
   samples <- paste0("S", seq_len(n_datasets * n_samples_per_dataset))
   datasets <- rep(paste0("DS", seq_len(n_datasets)), each = n_samples_per_dataset)
   metadata <- data.frame(sample = samples, dataset = datasets, stringsAsFactors = FALSE)
+  metadata$dataset <- factor(metadata$dataset, levels = unique(metadata$dataset))
   meta_path <- file.path(outdir, "sample_metadata.tsv")
   write.table(metadata, meta_path, sep = "\t", quote = FALSE, row.names = FALSE)
 
@@ -53,28 +63,78 @@ create_mock_hvCpG_data <- function(
   n_draws <- 10        # number of Bernoulli draws per CpG (i.e. coverage 10X)
   bias_prob <- c(0.1, 0.9)
 
-  for (i in seq_len(n_datasets)) {
-    sample_idx <- which(datasets == paste0("DS", i))
+  # -------------------------------
+  # 1. Choose true hvCpGs (10%)
+  # -------------------------------
+  prop_hv <- 0.10
+  n_hv <- round(n_cpgs * prop_hv)
 
-    if (i == 1) {
-      # DS1: very stable CpGs
-      noise_sd <- runif(1, 0.005, 0.010)
-    } else if (i == 2) {
-      # DS2: highly variable CpGs
-      noise_sd <- runif(1, 0.20, 0.35)
+  hv_cpg_idx <- sample(seq_len(n_cpgs), n_hv)
+
+  # The rest are stable everywhere
+  stable_cpg_idx <- setdiff(seq_len(n_cpgs), hv_cpg_idx)
+
+  # -------------------------------
+  # 2. Assign hv/stable per dataset
+  # -------------------------------
+  p_hv <- 0.65
+  dataset_names <- paste0("DS", seq_len(n_datasets))
+
+  # Define the dataset where hvCpGs must always be stable
+  stable_dataset <- "DS1"
+
+  hv_mask <- matrix(
+    FALSE,
+    nrow = n_cpgs,
+    ncol = n_datasets,
+    dimnames = list(cpg_names, dataset_names)
+  )
+
+  # For true hvCpGs: HV in 65% datasets except DS1
+  for (ds in dataset_names) {
+    if (ds == stable_dataset) {
+      hv_mask[hv_cpg_idx, ds] <- FALSE  # force stable
     } else {
-      # DS3+ : original behaviour
-      noise_sd <- runif(1, 0.05, 0.25)
+      hv_mask[hv_cpg_idx, ds] <- as.logical(
+        rbinom(n_hv, 1, p_hv)
+      )
     }
+  }
+
+  # All non-hvCpGs remain FALSE (stable everywhere)
+  for (i in seq_len(n_datasets)) {
+    ds <- paste0("DS", i)
+    sample_idx <- which(datasets == ds)
+
+    # CpG-specific SDs (determined by HV mask)
+    sd_vec <- ifelse(
+      hv_mask[, ds],
+      runif(n_cpgs, 0.20, 0.35),
+      runif(n_cpgs, 0.005, 0.015)
+    )
+
+    # Dataset-specific mean for normal CpGs (fixed across all samples in DS)
+    dataset_mean <- runif(length(normal_idx), 0, 1)
 
     for (j in sample_idx) {
-      # Low CpGs: biased Bernoulli means near 0
-      mat[low_idx, j] <- sapply(1:n_low, function(x) mean(rbinom(n_draws, 1, 0.1)))
-      # High CpGs: biased Bernoulli means near 1
-      mat[high_idx, j] <- sapply(1:n_high, function(x) mean(rbinom(n_draws, 1, 0.9)))
-      # Normal CpGs: random around dataset_mean
-      dataset_mean <- runif(length(normal_idx), 0, 1)
-      mat[normal_idx, j] <- pmin(pmax(rnorm(length(normal_idx), mean = dataset_mean, sd = noise_sd), 0), 1)
+
+      # Low CpGs
+      mat[low_idx, j] <-
+        sapply(seq_len(n_low), function(x) mean(rbinom(n_draws, 1, 0.1)))
+
+      # High CpGs
+      mat[high_idx, j] <-
+        sapply(seq_len(n_high), function(x) mean(rbinom(n_draws, 1, 0.9)))
+
+      # Normal CpGs
+      mat[normal_idx, j] <-
+        pmin(pmax(
+          rnorm(
+            length(normal_idx),
+            mean = dataset_mean,
+            sd   = sd_vec[normal_idx]
+          ),
+          0), 1)
     }
   }
 

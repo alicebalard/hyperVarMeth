@@ -69,7 +69,7 @@ mat_df <- merge(mat_df, metadata, by.x = "Sample", by.y = "sample")
 
 ggplot(mat_df, aes(x = Beta, group = dataset, fill = dataset)) +
   geom_histogram(binwidth = 0.05, color = "black") +
-  facet_wrap(~ dataset, ncol = 2) +
+  facet_wrap(~ dataset, ncol = 3) +
   theme_minimal(base_size = 14) +
   theme(legend.position = "none") +
   labs(title = "Beta-value distributions per dataset", x = "Beta", y = "Count")
