@@ -11,15 +11,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout repo
       - uses: actions/checkout@v3
 
-      # Install R
-      - uses: r-lib/actions/check-r-package@v2
+      # Step 2: Install R
+      - uses: r-lib/actions/setup-r@v2
         with:
-          args: --no-manual
-          error-on: warning
+          use-public-rspm: true
+          r-version: 4.3
 
-      # Install system dependencies required for ragg/systemfonts/textshaping
+      # Step 3: Install system dependencies for ragg, textshaping, etc.
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -31,17 +32,28 @@ jobs:
             libjpeg-dev \
             libharfbuzz-dev \
             libfribidi-dev \
-            libglib2.0-dev
+            libglib2.0-dev \
+            texlive-latex-base \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            texlive-fonts-extra
 
-      # Install CRAN + Bioconductor dependencies, including rhdf5
+      # Step 4: Install R package dependencies including Bioconductor packages
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: |
             any::rcmdcheck
             bioc::rhdf5
 
-      # Run R CMD check
+      # Step 5: Run R CMD check
       - uses: r-lib/actions/check-r-package@v2
         with:
           args: --no-manual
           error-on: "warning"
+
+      # Step 6: Upload check results as artifact
+      - uses: actions/upload-artifact@v4
+        with:
+          name: R-CMD-check-results
+          path: ./check
+          if-no-files-found: warn
