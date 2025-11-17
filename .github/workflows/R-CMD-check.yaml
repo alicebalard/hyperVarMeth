@@ -15,7 +15,7 @@ jobs:
           - {os: ubuntu-latest, r: '4.3'}
     name: R CMD check (${{ matrix.config.r }})
     steps:
-      # Step 1: Checkout repo
+      # Step 1: Checkout the repo
       - uses: actions/checkout@v3
 
       # Step 2: Set up R
@@ -30,15 +30,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev qpdf
 
-      # Step 4: Install R package dependencies
+      # Step 4: Install R packages needed for building and testing
       - name: Install R package dependencies
         run: |
-          Rscript -e "install.packages('remotes')"
+          Rscript -e "install.packages(c('remotes','testthat','roxygen2','devtools'))"
           Rscript -e "remotes::install_deps(dependencies = TRUE)"
 
-      # Step 5: Run tests
+      # Step 5: Run testthat tests (without devtools::test)
       - name: Run tests
-        run: Rscript -e 'if (requireNamespace("testthat", quietly = TRUE)) devtools::test()'
+        run: Rscript -e "if (requireNamespace('testthat', quietly = TRUE)) testthat::test_dir('tests/testthat')"
 
       # Step 6: Run R CMD check
       - name: Run R CMD check
