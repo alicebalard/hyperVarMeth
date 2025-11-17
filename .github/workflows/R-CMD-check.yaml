@@ -1,0 +1,45 @@
+name: R-CMD-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  R-CMD-check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config:
+          - {os: ubuntu-latest, r: '4.3'}
+    name: R CMD check (${{ matrix.config.r }})
+    steps:
+      # Step 1: Checkout repo
+      - uses: actions/checkout@v3
+
+      # Step 2: Set up R
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.config.r }}
+
+      # Step 3: Install system dependencies
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev qpdf
+
+      # Step 4: Install R package dependencies
+      - name: Install R package dependencies
+        run: |
+          install.packages('remotes')
+          remotes::install_deps(dependencies = TRUE)
+
+      # Step 5: Run tests
+      - name: Run tests
+        run: Rscript -e 'if (requireNamespace("testthat", quietly = TRUE)) devtools::test()'
+
+      # Step 6: Run R CMD check
+      - name: Run R CMD check
+        run: R CMD check --no-manual --as-cran .
