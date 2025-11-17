@@ -2,12 +2,7 @@ Package: hyperVarMeth
 Type: Package
 Title: Hypervariable CpG Detection Algorithm (hvCpG)
 Version: 0.1.0
-Authors@R: person(
-        given = "Alice",
-        family = "Balard",
-        email = "alice.cam.balard@gmail.com",
-        role = c("aut", "cre")
-)
+Authors@R: person(given = "Alice", family = "Balard", email = "alice.cam.balard@gmail.com", role = c("aut", "cre"))
 Description: Implements batched HDF5-based detection of hypervariable CpG sites 
     across tissues or datasets. Supports parallel processing and automated 
     alpha-parameter optimization per CpG.
