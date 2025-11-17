@@ -101,8 +101,11 @@ You should see a matrix of CpGs (rows) and their estimated alpha values.
 ggplot2::ggplot(result, ggplot2::aes(x=alpha)) +
   ggplot2::geom_histogram() +
   ggplot2::theme_minimal(base_size = 14)
+```
 
-# Plot raw values for an extremely stable and an extremely variable CpGs:
+### Plot sd of raw values for an extremely stable, a mid variable and an extremely variable CpG
+
+```{r}
 sta <- rownames(result)[which(result %in% min(result))[1]]
 
 idx_mid <- which.min(abs(result - 0.5))
@@ -110,37 +113,21 @@ mid <- rownames(result)[idx_mid]
 
 var <- rownames(result)[which(result %in% max(result))[1]]
 
-result[match(c(sta, mid,var), row.names(result)),]
-
 mat_df <- mat_df %>%
   dplyr::filter(CpG %in% c(sta, mid,var)) %>%
   dplyr::group_by(dataset, CpG) %>%
   dplyr::summarise(range = max(Beta, na.rm=TRUE)-min(Beta, na.rm=TRUE),
             sd = sd(Beta, na.rm=TRUE),
             n = sum(!is.na(Beta)))
-```
 
+result[match(c(sta, mid,var), row.names(result)),]
 
-```{r}
-ggplot2::ggplot(mat_df[mat_df$CpG %in% sta,], ggplot2::aes(x=dataset, y = sd))+
-  ggplot2::geom_point(ggplot2::aes(col=dataset), size = 3)+
-  ggplot2::theme_minimal(base_size = 14) +
-  ggplot2::coord_cartesian(ylim = c(0,1))+
-  ggplot2::ggtitle("a stable CpG")
-
-ggplot2::ggplot(mat_df[mat_df$CpG %in% mid,], ggplot2::aes(x=dataset, y = sd))+
-  ggplot2::geom_point(ggplot2::aes(col=dataset), size = 3)+
-  ggplot2::theme_minimal(base_size = 14) +
-  ggplot2::coord_cartesian(ylim = c(0,1))+
-  ggplot2::ggtitle("a variable CpG")
-
-ggplot2::ggplot(mat_df[mat_df$CpG %in% var,], ggplot2::aes(x=dataset, y = sd))+
-  ggplot2::geom_point(ggplot2::aes(col=dataset), size = 3)+
+ggplot2::ggplot(mat_df[mat_df$CpG %in% c(sta, mid, var),], ggplot2::aes(x=dataset, y = sd))+
+  ggplot2::geom_col(ggplot2::aes(fill=CpG), position = "dodge")+
   ggplot2::theme_minimal(base_size = 14)+
   ggplot2::coord_cartesian(ylim = c(0,1))+
-  ggplot2::ggtitle("a hyper variable CpG")
-
-mat_df[mat_df$CpG %in% "cg000004",]
+  ggplot2::ggtitle("a hyper variable CpG") +
+  ggplot2::scale_fill_viridis_d() 
 ```
 
 ### Confirm result file exists

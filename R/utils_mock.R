@@ -11,6 +11,8 @@
 #' @param n_samples_per_dataset Samples per dataset (default 4).
 #' @param n_cpgs Number of CpGs (default 200).
 #' @param seed Random seed (default 1234).
+#' @param lowvar_dataset Name of dataset with reduced variability (default "DS1").
+#' @param lowvar_multiplier SD scaling factor for that dataset
 #' @return Invisibly, a list of paths and simulated CpG names.
 #'
 #' @export
@@ -22,7 +24,9 @@ create_mock_hvCpG_data <- function(
     n_datasets = 10,
     n_samples_per_dataset = 3,
     n_cpgs = 200,
-    seed = 1234
+    seed = 1234,
+    lowvar_dataset = "DS1",
+    lowvar_multiplier = 0.25
 ) {
   # 1. Select the true set of hypervariable CpGs
   # (10% of them)
@@ -112,6 +116,9 @@ create_mock_hvCpG_data <- function(
       runif(n_cpgs, 0.20, 0.35),
       runif(n_cpgs, 0.005, 0.015)
     )
+
+    # Add one dataset with low variability
+    sd_vec <- sd_vec * (if (ds == lowvar_dataset) lowvar_multiplier else 1)
 
     # Dataset-specific mean for normal CpGs (fixed across all samples in DS)
     dataset_mean <- runif(length(normal_idx), 0, 1)

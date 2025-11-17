@@ -110,10 +110,21 @@ plot_df <- res %>% as.data.frame() %>%
 plot_df$dataset <- factor(plot_df$dataset, levels = unique(plot_df$dataset))
 
 # Combine histograms
+# ggplot2::ggplot(plot_df, ggplot2::aes(x = value, group = dataset, fill = dataset)) +
+#   # ggplot2::geom_density(bins = 50, alpha = .4) +
+#   ggplot2::geom_histogram(position = "dodge") +
+#   ggplot2::theme_minimal(base_size = 14) +
+#   ggplot2::scale_fill_viridis_d() +
+#   ggplot2::xlab("log posterior probability that the CpG is hypervariable in dataset k")
+
+
 ggplot2::ggplot(plot_df, ggplot2::aes(x = value, group = dataset, fill = dataset)) +
-  ggplot2::geom_density(bins = 50, alpha = .4) +
+  ggplot2::geom_histogram(position = "dodge") +
+  ggplot2::facet_wrap(.~dataset, ncol = 3) +
   ggplot2::theme_minimal(base_size = 14) +
+  ggplot2::theme(legend.position = "none") +
   ggplot2::scale_fill_viridis_d() +
   ggplot2::xlab("log posterior probability that the CpG is hypervariable in dataset k")
+
 ```
 

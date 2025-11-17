@@ -9,7 +9,9 @@ create_mock_hvCpG_data(
   n_datasets = 10,
   n_samples_per_dataset = 3,
   n_cpgs = 200,
-  seed = 1234
+  seed = 1234,
+  lowvar_dataset = "DS1",
+  lowvar_multiplier = 0.25
 )
 }
 \arguments{
@@ -22,6 +24,10 @@ create_mock_hvCpG_data(
 \item{n_cpgs}{Number of CpGs (default 200).}
 
 \item{seed}{Random seed (default 1234).}
+
+\item{lowvar_dataset}{Name of dataset with reduced variability (default "DS1").}
+
+\item{lowvar_multiplier}{SD scaling factor for that dataset}
 }
 \value{
 Invisibly, a list of paths and simulated CpG names.
