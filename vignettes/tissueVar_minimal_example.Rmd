@@ -21,9 +21,6 @@ out.width = "100%" # make the figure scale to container width
 )
 
 `%>%` <- magrittr::`%>%`
-
-# Suppress R CMD check notes for non-standard evaluation (NSE) variables
-utils::globalVariables(c("dataset", "median_sd", "lambda"))
 ```
 
 ## 1. Create a mock methylation dataset

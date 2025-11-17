@@ -2,6 +2,9 @@
 ## Alice Balard
 ## Last major update Nov 2025
 
+# To avoid R CMD check notes for NSE variables
+utils::globalVariables(c("dataset", "median_sd", "lambda"))
+
 #' Prepare input data for hvCpG analysis
 #'
 #' This function loads the metadata, dataset-level parameters, and CpG names
