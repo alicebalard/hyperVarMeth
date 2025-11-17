@@ -2,8 +2,14 @@ Package: hyperVarMeth
 Type: Package
 Title: Hypervariable CpG Detection Algorithm (hvCpG)
 Version: 0.1.0
-Authors@R: 
-    person("Alice", "Balard", email = "alice.cam.balard@gmail.com", role = c("aut", "cre"))
+Authors@R: c(
+    person(
+        given = "Alice",
+        family = "Balard",
+        email = "alice.cam.balard@gmail.com",
+        role = c("aut", "cre")
+    )
+)
 Description: Implements batched HDF5-based detection of hypervariable CpG sites 
     across tissues or datasets. Supports parallel processing and automated 
     alpha-parameter optimization per CpG.
@@ -18,20 +24,8 @@ Imports:
     parallel,
     stats,
     utils
-VignetteBuilder: knitr
-Suggests: 
-    testthat (>= 3.0.0),
-    knitr,
-    rmarkdown,
-    devtools,
-    ggplot2,
-    reshape2,
-    matrixStats,
-    tidyr,
-    viridis,
-    qpdf
+Suggests:
+    testthat (>= 3.0.0)
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3
-
-
