@@ -9,34 +9,30 @@ on:
 jobs:
   R-CMD-check:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        config:
-          - {os: ubuntu-latest, r: '4.3'}
-    name: R CMD check (${{ matrix.config.r }})
+
     steps:
-      # Step 1: Checkout the repo
       - uses: actions/checkout@v3
 
-      # Step 2: Set up R
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
+      # Install R
+      - uses: r-lib/actions/setup-r@v2
         with:
-          r-version: ${{ matrix.config.r }}
+          use-public-rspm: true
 
-      # Step 3: Install system dependencies
+      # Install system dependencies required for ragg/systemfonts/textshaping
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev qpdf
+          sudo apt-get install -y \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libpng-dev \
+            libtiff5-dev \
+            libjpeg-dev \
+            libharfbuzz-dev \
+            libfribidi-dev \
+            libglib2.0-dev
 
-      # Step 4: Install R packages needed for building and testing
-      - name: Install R package dependencies
-        run: |
-          Rscript -e "install.packages(c('remotes','testthat','roxygen2','devtools'))"
-          Rscript -e "remotes::install_deps(dependencies = TRUE)"
-
-     # Install CRAN + Bioconductor dependencies including rhdf5
+      # Install CRAN + Bioconductor dependencies, including rhdf5
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: |
@@ -44,10 +40,8 @@ jobs:
             bioc::rhdf5
           needs: check
 
-      # Step 5: Run testthat tests (without devtools::test)
-      - name: Run R CMD check
-        run: Rscript -e "rcmdcheck::rcmdcheck(args = '--no-manual', error_on = 'warning')"
-
-      # Step 6: Run R CMD check
-      - name: Run R CMD check
-        run: R CMD check --no-manual --as-cran .
+      # Run R CMD check
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          args: --no-manual
+          error-on: "warning"
