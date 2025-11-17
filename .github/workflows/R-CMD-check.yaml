@@ -14,9 +14,10 @@ jobs:
       - uses: actions/checkout@v3
 
       # Install R
-      - uses: r-lib/actions/setup-r@v2
+      - uses: r-lib/actions/check-r-package@v2
         with:
-          use-public-rspm: true
+          args: --no-manual
+          error-on: warning
 
       # Install system dependencies required for ragg/systemfonts/textshaping
       - name: Install system dependencies
