@@ -210,7 +210,7 @@ getALL_LogPhv_oneCpG_byTissue_batch <- function(
 
 #' Run and save tissue-level hvCpG log-probabilities
 #'
-#' Wrapper to compute and (optionally) save the CpG × dataset matrix of log(Phv|Dk).
+#' Wrapper to compute and (optionally) save the CpG x dataset matrix of log(Phv|Dk).
 #' Returns the matrix invisibly.
 #'
 #' @param analysis Character string. Name of the analysis.

@@ -34,8 +34,8 @@ create_mock_hvCpG_data <- function(
   # decide whether it is HV (prob 0.65) or stable (prob 0.35).
   # 3. For the "fully stable dataset", force all hvCpGs to be stable.
   # 4. Use dataset-specific SD values:
-  # HV CpGs: sd ~ 0.20–0.35
-  # Stable CpGs: sd ~ 0.005–0.015
+  # HV CpGs: sd ~ 0.20-0.35
+  # Stable CpGs: sd ~ 0.005-0.015
 
   set.seed(seed)
   dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
