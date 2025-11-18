@@ -44,3 +44,9 @@ jobs:
           extra-packages: |
             any::rcmdcheck
             bioc::rhdf5
+
+      # Step 5: Run R CMD check 
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          args: "--no-manual"
+          error-on: "warning"
