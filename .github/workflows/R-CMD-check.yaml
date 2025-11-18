@@ -55,5 +55,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: R-CMD-check-results
-          path: ./check
+          path: ${{ runner.temp }}/check
           if-no-files-found: warn
