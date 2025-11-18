@@ -193,10 +193,19 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
     rownames(M_batch) <- cpg_names_all[row_batches]
     colnames(M_batch) <- samples
 
-    # Reorder samples to match metadata
-    M_batch <- M_batch[, metadata$sample, drop = FALSE]
+    # SAFE sample reordering
+    sample_idx <- match(metadata$sample, samples)
 
-    sample_to_dataset <- setNames(metadata$dataset, metadata$sample)
+    if (anyNA(sample_idx)) {
+        stop("Some metadata samples not found in HDF5 samples: ",
+             paste(metadata$sample[is.na(sample_idx)], collapse=", "))
+    }
+
+    M_batch <- M_batch[, sample_idx, drop = FALSE]
+    colnames(M_batch) <- metadata$sample
+
+    sample_to_dataset <- metadata$dataset
+    names(sample_to_dataset) <- metadata$sample
 
     # Split CpGs into chunks (not one per worker) -- SAFELY
     nrows <- nrow(M_batch)

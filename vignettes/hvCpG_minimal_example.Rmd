@@ -82,7 +82,7 @@ result <- hyperVarMeth::runAndSave_fast(
   p0 = 0.8,
   p1 = 0.65,
   dataDir = dirname(mock$metadata),
-  batch_size = 10, # smaller batch for mock
+  batch_size = 100, 
   skipsave = FALSE
 )
 ```
