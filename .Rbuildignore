@@ -4,3 +4,6 @@
 ^tests/testthat/Rplots\.pdf$
 ^vignettes/mock_data/.*\.h5$
 ^\.github$
+^\.Rproj.user$
+^doc$
+^Meta$
