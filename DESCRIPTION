@@ -19,7 +19,14 @@ Imports:
     stats,
     utils
 Suggests:
-    testthat (>= 3.0.0)
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0),
+    reshape2,
+    matrixStats,
+    ggplot2,
+    tidyr
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3
+VignetteBuilder: knitr

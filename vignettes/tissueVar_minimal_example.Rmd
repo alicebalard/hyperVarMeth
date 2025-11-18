@@ -34,7 +34,7 @@ This creates a small mock dataset with a few CpGs, samples, and datasets for tes
 ## 2. Prepare data
 
 ```{r}
-prep <- hyperVarMeth::prepData("mock", dirname(mock$metadata))
+prep <- hyperVarMeth::prepData("mock", dataDir = "inst/mock_data")
 str(prep)
 ```
 
