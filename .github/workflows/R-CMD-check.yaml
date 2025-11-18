@@ -48,8 +48,8 @@ jobs:
       # Step 5: Run R CMD check
       - uses: r-lib/actions/check-r-package@v2
         with:
-          args: --no-manual
-          error-on: warning
+          args: "--no-manual"
+          error-on: "warning"
 
       # Step 6: Upload check results as artifact
       - uses: actions/upload-artifact@v4
