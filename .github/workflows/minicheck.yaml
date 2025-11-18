@@ -1,4 +1,4 @@
-name: R-CMD-check
+name: R-CMD-check-mini
 
 on:
   push:
@@ -19,3 +19,28 @@ jobs:
         with:
           use-public-rspm: true
           r-version: "4.3"
+
+      # Step 3: Install system dependencies for ragg, textshaping, etc.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libpng-dev \
+            libtiff5-dev \
+            libjpeg-dev \
+            libharfbuzz-dev \
+            libfribidi-dev \
+            libglib2.0-dev \
+            texlive-latex-base \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            texlive-fonts-extra
+
+      # Step 4: Install R package dependencies including Bioconductor packages
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::rcmdcheck
+            bioc::rhdf5
