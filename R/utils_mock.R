@@ -20,7 +20,7 @@
 #' @importFrom utils write.table
 #' @importFrom stats rnorm rbinom runif sd quantile median
 create_mock_hvCpG_data <- function(
-    outdir = "inst/mock_data",
+    outdir = system.file("mock_data", package = "hyperVarMeth"),
     n_datasets = 10,
     n_samples_per_dataset = 3,
     n_cpgs = 200,
@@ -175,7 +175,8 @@ create_mock_hvCpG_data <- function(
   h5_path <- file.path(outdir, "all_matrix_noscale.h5")
   if (file.exists(h5_path)) file.remove(h5_path)
   rhdf5::h5createFile(h5_path)
-  rhdf5::h5write(mat, h5_path, "matrix")
+  rhdf5::h5write(mat, h5_path, "matrix", native=TRUE) ## Important for portability between programming languages!
+  ## E.g. python outputs in R majors would otherwise be read in col major in R!
   rhdf5::h5write(samples, h5_path, "samples")
   rhdf5::h5write(cpg_names, h5_path, "cpg_names")
   rhdf5::h5write(datasets, h5_path, "sample_groups")

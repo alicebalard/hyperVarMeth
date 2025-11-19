@@ -149,7 +149,7 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
   dataset_groups <- split(seq_len(nrow(metadata)), metadata$dataset)
 
   # Read sample names once
-  samples <- h5read(h5file, "samples")
+  samples <- rhdf5::h5read(h5file, "samples")
 
   # Map CpG names to indices
   cpg_indices <- match(cpg_names_vec, cpg_names_all)
@@ -174,11 +174,13 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
     # Skip empty batch
     if (length(row_batches) == 0) next
 
-    # Load block of matrix (samples x CpGs)
-    M_batch <- h5read(
+    # Load block of matrix (some CpGs x all samples)
+    M_batch <- rhdf5::h5read(
       file = h5file,
       name = "matrix",
-      index = list(row_batches, NULL)  # rows = subset of CpGs, columns = all samples
+      index = list(row_batches, NULL),  # rows = subset of CpGs, columns = all samples
+      native = TRUE ## Important for portability between programming languages!
+      ## E.g. python outputs in R majors would otherwise be read in col major in R!
     )
 
     # Force to matrix safely

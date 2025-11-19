@@ -7,7 +7,7 @@ library(hyperVarMeth)
 
 test_that("prepData loads mock data correctly for tissue analysis", {
   mock <- hyperVarMeth::create_mock_hvCpG_data()
-  prep <- prepData(analysis = "mock", dataDir = dirname(mock$metadata))
+  prep <- prepData(analysis = "mock", dataDir = system.file("mock_data", package = "hyperVarMeth"))
   cpg_names_all  <- prep$cpg_names_all
   metadata <- prep$metadata
 
@@ -15,7 +15,8 @@ test_that("prepData loads mock data correctly for tissue analysis", {
   Mdf <- rhdf5::h5read(
     file = prep$h5file,
     name = "matrix",
-    index = list(1:nrow(cpg_names_all), NULL)
+    index = list(1:nrow(cpg_names_all), NULL),
+    native = TRUE ## IMPORTANT
   )
 
   expect_type(prep, "list")
@@ -37,8 +38,8 @@ test_that("runAndSave_tissueAnalysis runs and optionally saves", {
     NCORES = 1,
     p1 = 0.9,
     overwrite = TRUE,
-    batch_size = 20,
-    dataDir = dirname(mock$metadata),
+    batch_size = 100,
+    dataDir = system.file("mock_data", package = "hyperVarMeth"),
     skipsave = TRUE
   )
 

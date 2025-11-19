@@ -5,7 +5,7 @@
 \title{Create a mock hvCpG dataset with realistic lambda and SD values}
 \usage{
 create_mock_hvCpG_data(
-  outdir = "inst/mock_data",
+  outdir = system.file("mock_data", package = "hyperVarMeth"),
   n_datasets = 10,
   n_samples_per_dataset = 3,
   n_cpgs = 200,

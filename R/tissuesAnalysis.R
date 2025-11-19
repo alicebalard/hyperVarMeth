@@ -139,7 +139,9 @@ getALL_LogPhv_oneCpG_byTissue_batch <- function(
     M_batch <- rhdf5::h5read(
       file = h5file,
       name = "matrix",
-      index = list(row_CpGs_batch, NULL)
+      index = list(row_CpGs_batch, NULL),  # rows = subset of CpGs, columns = all samples
+      native = TRUE ## Important for portability between programming languages!
+      ## E.g. python outputs in R majors would otherwise be read in col major in R!
     )
 
     ## Assign dimnames

@@ -26,7 +26,8 @@ out.width = "100%" # make the figure scale to container width
 ## 1. Create a mock methylation dataset
 
 ```{r}
-mock <- hyperVarMeth::create_mock_hvCpG_data()
+outdir <- system.file("mock_data", package = "hyperVarMeth")
+mock <- hyperVarMeth::create_mock_hvCpG_data(outdir = outdir)
 ```
 
 This creates a small mock dataset with a few CpGs, samples, and datasets for testing.
@@ -34,7 +35,10 @@ This creates a small mock dataset with a few CpGs, samples, and datasets for tes
 ## 2. Prepare data
 
 ```{r}
-prep <- hyperVarMeth::prepData("mock", dataDir = "inst/mock_data")
+# Use system.file() to get installed package data path
+data_dir <- system.file("mock_data", package = "hyperVarMeth")
+
+prep <- hyperVarMeth::prepData("mock", dataDir = data_dir)
 str(prep)
 ```
 
@@ -50,7 +54,7 @@ metadata <- read.table(mock$metadata, header = TRUE, sep = "\t", stringsAsFactor
 h5file <- mock$h5file
 
 # Read methylation matrix from HDF5
-mat <- rhdf5::h5read(h5file, "matrix")
+mat <- rhdf5::h5read(h5file, "matrix", native = TRUE)
 rownames(mat) <- mock$cpg_names
 colnames(mat) <- metadata$sample
 
@@ -72,19 +76,30 @@ ggplot2::ggplot(mat_df, ggplot2::aes(x = Beta, group = dataset, fill = dataset))
 ## 3. Run hvCpG detection (batched + parallel)
 
 ```{r}
-tmp_dir <- tempdir()
-
-result <- hyperVarMeth::runAndSave_fast(
-  analysis = "mock",
-  cpg_names_vec = prep$cpg_names_all,
-  resultDir = tmp_dir,
-  NCORES = 1,
-  p0 = 0.8,
-  p1 = 0.65,
-  dataDir = dirname(mock$metadata),
-  batch_size = 100, 
-  skipsave = FALSE
-)
+result <- local({
+  tmp_dir <- withr::local_tempdir(pattern = "tmp_vignette") ## 
+  
+  hyperVarMeth::runAndSave_fast(
+    analysis = "mock",
+    cpg_names_vec = prep$cpg_names_all,
+    resultDir = tmp_dir,
+    NCORES = 1,
+    p0 = 0.8,
+    p1 = 0.65,
+    dataDir = data_dir,
+    batch_size = 100,
+    skipsave = FALSE
+  )
+  
+  result_files <- list.files(tmp_dir, pattern = "results_mock.*\\.rds$")
+  if (length(result_files) == 0) stop("No results file generated!")
+  
+  # Read the first results file into an R object
+  res <- readRDS(file.path(tmp_dir, result_files[1]))
+  
+  # Return only the result object, tmp_dir and files deleted on block exit
+  res
+})
 ```
 
 This will compute the optimal alpha values for all CpGs in the mock dataset and save the result to tmp_dir.
@@ -117,8 +132,8 @@ mat_df <- mat_df %>%
   dplyr::filter(CpG %in% c(sta, mid,var)) %>%
   dplyr::group_by(dataset, CpG) %>%
   dplyr::summarise(range = max(Beta, na.rm=TRUE)-min(Beta, na.rm=TRUE),
-            sd = sd(Beta, na.rm=TRUE),
-            n = sum(!is.na(Beta)))
+                   sd = sd(Beta, na.rm=TRUE),
+                   n = sum(!is.na(Beta)))
 
 result[match(c(sta, mid,var), row.names(result)),]
 
@@ -128,11 +143,6 @@ ggplot2::ggplot(mat_df[mat_df$CpG %in% c(sta, mid, var),], ggplot2::aes(x=datase
   ggplot2::coord_cartesian(ylim = c(0,1))+
   ggplot2::ggtitle("a hyper variable CpG") +
   ggplot2::scale_fill_viridis_d() 
-```
-
-### Confirm result file exists
-```{r}
-list.files(tmp_dir, pattern = "results_mock")
 ```
 
 ## Notes

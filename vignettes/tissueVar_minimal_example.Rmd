@@ -26,7 +26,8 @@ out.width = "100%" # make the figure scale to container width
 ## 1. Create a mock methylation dataset
 
 ```{r}
-mock <- hyperVarMeth::create_mock_hvCpG_data()
+outdir <- system.file("mock_data", package = "hyperVarMeth")
+mock <- hyperVarMeth::create_mock_hvCpG_data(outdir = outdir)
 ```
 
 This creates a small mock dataset with a few CpGs, samples, and datasets for testing.
@@ -34,7 +35,10 @@ This creates a small mock dataset with a few CpGs, samples, and datasets for tes
 ## 2. Prepare data
 
 ```{r}
-prep <- hyperVarMeth::prepData("mock", dataDir = "inst/mock_data")
+# Use system.file() to get installed package data path
+data_dir <- system.file("mock_data", package = "hyperVarMeth")
+
+prep <- hyperVarMeth::prepData("mock", dataDir = data_dir)
 str(prep)
 ```
 
