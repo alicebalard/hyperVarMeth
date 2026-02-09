@@ -11,7 +11,8 @@ getAllOptimAlpha_parallel_batch_fast(
   p1,
   prep,
   batch_size,
-  Nds
+  Nds,
+  minind
 )
 }
 \arguments{
@@ -26,6 +27,8 @@ getAllOptimAlpha_parallel_batch_fast(
 \item{batch_size}{Integer; number of CpGs per HDF5 batch.}
 
 \item{Nds}{Integer; minimum number of datasets required to compute a CpG (default 3).}
+
+\item{minind}{Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).}
 }
 \value{
 A numeric matrix with one column (\code{alpha}) and rownames equal to CpG IDs.

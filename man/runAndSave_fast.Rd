@@ -16,7 +16,8 @@ runAndSave_fast(
   dataDir,
   skipsave = FALSE,
   Nds = 3,
-  subsetMetadata = FALSE
+  subsetMetadata = FALSE,
+  minind = 3
 )
 }
 \arguments{
@@ -45,6 +46,8 @@ Should contain \code{sample_metadata.tsv}, \code{all_medsd_lambda.tsv}, and an H
 \item{subsetMetadata}{Logical or data frame. If \code{FALSE} (default), the full metadata
 is used. Otherwise, a subset of the metadata can be provided to restrict
 the analysis to specific samples or datasets.}
+
+\item{minind}{Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).}
 }
 \value{
 Invisibly returns the result matrix (CpG x alpha).

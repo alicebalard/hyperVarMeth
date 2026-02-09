@@ -4,7 +4,15 @@
 \alias{runOptim1CpG_gridrefine}
 \title{Estimate the optimal alpha value for one CpG}
 \usage{
-runOptim1CpG_gridrefine(Mdf, metadata, dataset_groups, ds_params, p0, p1)
+runOptim1CpG_gridrefine(
+  Mdf,
+  metadata,
+  dataset_groups,
+  ds_params,
+  p0,
+  p1,
+  minind
+)
 }
 \arguments{
 \item{Mdf}{Numeric matrix (1 CpG x samples). Methylation values for a single CpG.}
@@ -17,6 +25,8 @@ runOptim1CpG_gridrefine(Mdf, metadata, dataset_groups, ds_params, p0, p1)
 columns \code{sd0}, \code{sd1}, and rownames corresponding to dataset names.}
 
 \item{p0, p1}{Numeric scalars: True negative and true positive rates.}
+
+\item{minind}{Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).}
 }
 \value{
 Numeric scalar: estimated optimal alpha for the CpG.

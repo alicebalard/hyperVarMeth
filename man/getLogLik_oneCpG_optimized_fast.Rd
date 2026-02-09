@@ -11,7 +11,8 @@ getLogLik_oneCpG_optimized_fast(
   ds_params,
   p0,
   p1,
-  alpha
+  alpha,
+  minind
 )
 }
 \arguments{
@@ -27,6 +28,8 @@ columns \code{sd0}, \code{sd1}, and rownames corresponding to dataset names.}
 \item{p0, p1}{Numeric scalars: True negative and true positive rates.}
 
 \item{alpha}{Numeric scalar (0-1): Probability of being a hypervariable site.}
+
+\item{minind}{Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).}
 }
 \value{
 Numeric scalar: the summed log-likelihood for the CpG across datasets.

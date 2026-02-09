@@ -29,7 +29,7 @@ test_that("getLogLik_oneCpG_optimized_fast computes log-likelihood", {
 
   Mdf <- matrix(runif(30), nrow = 1)
   loglik <- getLogLik_oneCpG_optimized_fast(Mdf, prep$metadata, ds_groups, ds_params,
-                                            p0 = 0.9, p1 = 0.9, alpha = 0.5)
+                                            p0 = 0.9, p1 = 0.9, alpha = 0.5, minind = 3)
 
   expect_type(loglik, "double")
   expect_true(is.finite(loglik))
@@ -48,7 +48,7 @@ test_that("runOptim1CpG_gridrefine returns alpha between 0 and 1", {
   )
 
   Mdf <- matrix(runif(30), nrow = 1)
-  alpha <- runOptim1CpG_gridrefine(Mdf, prep$metadata, ds_groups, ds_params, p0 = 0.9, p1 = 0.9)
+  alpha <- runOptim1CpG_gridrefine(Mdf, prep$metadata, ds_groups, ds_params, p0 = 0.9, p1 = 0.9, minind = 3)
 
   expect_true(alpha >= 0 && alpha <= 1)
 })
