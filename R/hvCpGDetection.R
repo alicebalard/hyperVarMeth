@@ -15,13 +15,14 @@
 #'   columns `sd0`, `sd1`, and rownames corresponding to dataset names.
 #' @param p0,p1 Numeric scalars: True negative and true positive rates.
 #' @param alpha Numeric scalar (0-1): Probability of being a hypervariable site.
+#' @param minind Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).
 #'
 #' @return Numeric scalar: the summed log-likelihood for the CpG across datasets.
 #'
 #' @export
 #'
 #' @importFrom stats dnorm
-getLogLik_oneCpG_optimized_fast <- function(Mdf, metadata, dataset_groups, ds_params, p0, p1, alpha) {
+getLogLik_oneCpG_optimized_fast <- function(Mdf, metadata, dataset_groups, ds_params, p0, p1, alpha, minind) {
 
   # samples <- metadata$sample # to rm? useless?
   datasets <- unique(metadata$dataset)
@@ -34,7 +35,7 @@ getLogLik_oneCpG_optimized_fast <- function(Mdf, metadata, dataset_groups, ds_pa
 
   for (k in datasets) {
     Mij_vals <- as.numeric(Mdf[, dataset_groups[[k]], drop = FALSE])
-    if (length(Mij_vals) < 3 || all(is.na(Mij_vals))) next
+    if (length(Mij_vals) < minind || all(is.na(Mij_vals))) next
 
     # Precompute mean and SDs
     mu_jk <- mean(Mij_vals, na.rm = TRUE)
@@ -79,16 +80,17 @@ getLogLik_oneCpG_optimized_fast <- function(Mdf, metadata, dataset_groups, ds_pa
 #' @param ds_params Data frame with precomputed parameters per dataset:
 #'   columns `sd0`, `sd1`, and rownames corresponding to dataset names.
 #' @param p0,p1 Numeric scalars: True negative and true positive rates.
+#' @param minind Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).
 #'
 #' @return Numeric scalar: estimated optimal alpha for the CpG.
 #' @export
 #'
 #' @importFrom stats optim
-runOptim1CpG_gridrefine <- function(Mdf, metadata, dataset_groups, ds_params, p0, p1) {
+runOptim1CpG_gridrefine <- function(Mdf, metadata, dataset_groups, ds_params, p0, p1, minind) {
   # Step 1. Coarse grid search (0, 0.05, 0.1...)
   grid <- seq(0, 1, length.out = 21)
   logliks <- vapply(grid, function(a) {
-    getLogLik_oneCpG_optimized_fast(Mdf, metadata, dataset_groups, ds_params, p0, p1, a)
+    getLogLik_oneCpG_optimized_fast(Mdf, metadata, dataset_groups, ds_params, p0, p1, a, minind)
   }, numeric(1))
 
   best_idx <- which.max(logliks)
@@ -101,7 +103,7 @@ runOptim1CpG_gridrefine <- function(Mdf, metadata, dataset_groups, ds_params, p0
   resOpt <- optim(
     par = alpha_start,
     fn = function(alpha) {
-      getLogLik_oneCpG_optimized_fast(Mdf, metadata, dataset_groups, ds_params, p0, p1, alpha)
+      getLogLik_oneCpG_optimized_fast(Mdf, metadata, dataset_groups, ds_params, p0, p1, alpha, minind)
     },
     method = "Brent",
     lower = lower, upper = upper,
@@ -122,6 +124,7 @@ runOptim1CpG_gridrefine <- function(Mdf, metadata, dataset_groups, ds_params, p0
 #' @param prep List returned by [prepData()], containing metadata and HDF5 paths.
 #' @param batch_size Integer; number of CpGs per HDF5 batch.
 #' @param Nds Integer; minimum number of datasets required to compute a CpG (default 3).
+#' @param minind Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).
 #'
 #' @return A numeric matrix with one column (`alpha`) and rownames equal to CpG IDs.
 #'
@@ -131,7 +134,7 @@ runOptim1CpG_gridrefine <- function(Mdf, metadata, dataset_groups, ds_params, p0
 #' @importFrom rhdf5 h5read
 #' @importFrom stats setNames
 #' @importFrom parallel mclapply
-getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, prep, batch_size, Nds) {
+getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, prep, batch_size, Nds, minind) {
   metadata       <- prep$metadata
   cpg_names_all  <- prep$cpg_names_all
   h5file         <- prep$h5file
@@ -259,7 +262,7 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
         tryCatch(
           runOptim1CpG_gridrefine(Mdf = Mdf, metadata = metadata,
                                   dataset_groups = dataset_groups,
-                                  ds_params = ds_params, p0 = p0, p1 = p1),
+                                  ds_params = ds_params, p0 = p0, p1 = p1, minind = minind),
           error = function(e) NA_real_
         )
       })
@@ -301,6 +304,7 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
 #' @param subsetMetadata Logical or data frame. If `FALSE` (default), the full metadata
 #'   is used. Otherwise, a subset of the metadata can be provided to restrict
 #'   the analysis to specific samples or datasets.
+#' @param minind Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).
 #'
 #' @return Invisibly returns the result matrix (CpG x alpha).
 #'   The function also saves an `.RData` file to `resultDir` unless `skipsave = TRUE`.
@@ -309,7 +313,7 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
 runAndSave_fast <- function(
     analysis, cpg_names_vec, resultDir, NCORES, p0, p1,
     overwrite = FALSE, batch_size = 10000, dataDir,
-    skipsave = FALSE, Nds = 3, subsetMetadata = FALSE
+    skipsave = FALSE, Nds = 3, subsetMetadata = FALSE, minind = 3
 ) {
   t <- Sys.time()
   prep <- prepData(analysis, dataDir, subsetMetadata)
@@ -334,7 +338,7 @@ runAndSave_fast <- function(
   # Run batch + parallel processing
   result <- getAllOptimAlpha_parallel_batch_fast(
     cpg_names_vec = cpg_names_vec, NCORES = NCORES,
-    p0 = p0, p1 = p1, prep = prep, batch_size = batch_size, Nds = Nds
+    p0 = p0, p1 = p1, prep = prep, batch_size = batch_size, Nds = Nds, minind = minind
   )
 
   if (!skipsave) {
@@ -345,4 +349,3 @@ runAndSave_fast <- function(
 
   invisible(result)
 }
-
