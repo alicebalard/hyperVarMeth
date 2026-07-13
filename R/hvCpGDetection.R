@@ -58,7 +58,7 @@ getLogLik_oneCpG_optimized_fast <- function(Mdf, metadata, dataset_groups, ds_pa
     }
 
     # Sum across latent states and mixture
-    col_sums <- apply(zjk_probs, c(1,3), sum)
+    col_sums <- apply(zjk_probs, c(1,2), sum)
     dataset_loglik <- sum(log(rowSums(col_sums %*% proba_hvCpG_vec)))
     if (!is.finite(dataset_loglik)) dataset_loglik <- 0
 
