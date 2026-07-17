@@ -1,6 +1,5 @@
 ## hvCpG algorithm (batched HDF5 loading)
 ## Alice Balard
-## Last major update Nov 2025
 
 #' Compute log-likelihood for one CpG across all datasets
 #'
@@ -59,7 +58,16 @@ getLogLik_oneCpG_optimized_fast <- function(Mdf, metadata, dataset_groups, ds_pa
 
     # Sum across latent states and mixture
     col_sums <- apply(zjk_probs, c(1,2), sum)
-    dataset_loglik <- sum(log(rowSums(col_sums %*% proba_hvCpG_vec)))
+
+    # dataset_loglik <- sum(log(rowSums(col_sums %*% proba_hvCpG_vec))) # old
+    ############# new July 2026
+    vals <- log(rowSums(col_sums %*% proba_hvCpG_vec))
+    vals <- vals[is.finite(vals)]
+
+    dataset_loglik <- if (length(vals) > 0) mean(vals) else NA_real_
+    if (!is.finite(dataset_loglik)) dataset_loglik <- 0
+    ###################
+
     if (!is.finite(dataset_loglik)) dataset_loglik <- 0
 
     log_P_Mj <- log_P_Mj + dataset_loglik
