@@ -25,7 +25,8 @@ Suggests:
     reshape2,
     matrixStats,
     ggplot2,
-    tidyr
+    tidyr,
+    withr
 Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3
 VignetteBuilder: knitr
