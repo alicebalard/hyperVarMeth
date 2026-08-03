@@ -17,7 +17,8 @@ runAndSave_fast(
   skipsave = FALSE,
   Nds = 3,
   subsetMetadata = FALSE,
-  minind = 3
+  minind = 3,
+  alpha0 = 0.01
 )
 }
 \arguments{
@@ -48,6 +49,8 @@ is used. Otherwise, a subset of the metadata can be provided to restrict
 the analysis to specific samples or datasets.}
 
 \item{minind}{Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).}
+
+\item{alpha0}{Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.}
 }
 \value{
 Invisibly returns the result matrix (CpG x alpha).

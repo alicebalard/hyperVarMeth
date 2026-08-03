@@ -1,125 +1,6 @@
 ## hvCpG algorithm (batched HDF5 loading)
 ## Alice Balard
 
-#' Compute log-likelihood for one CpG across all datasets
-#'
-#' Calculates the overall log-likelihood of observing methylation values
-#' for a given CpG across multiple datasets, given mixture parameters and
-#' hypervariable probabilities.
-#'
-#' @param Mdf Numeric matrix (1 CpG x samples). Methylation values for a single CpG.
-#' @param metadata Data frame containing `sample` and `dataset` columns.
-#' @param dataset_groups Named list mapping dataset names to row indices in `metadata`.
-#' @param ds_params Data frame with precomputed parameters per dataset:
-#'   columns `sd0`, `sd1`, and rownames corresponding to dataset names.
-#' @param p0,p1 Numeric scalars: True negative and true positive rates.
-#' @param alpha Numeric scalar (0-1): Probability of being a hypervariable site.
-#' @param minind Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).
-#'
-#' @return Numeric scalar: the summed log-likelihood for the CpG across datasets.
-#'
-#' @export
-#'
-#' @importFrom stats dnorm
-getLogLik_oneCpG_optimized_fast <- function(Mdf, metadata, dataset_groups, ds_params, p0, p1, alpha, minind) {
-
-  # samples <- metadata$sample # to rm? useless?
-  datasets <- unique(metadata$dataset)
-
-  # Precompute p0/p1 matrix and mixture probs
-  p0p1_mat <- matrix(c(p0, 1 - p1, 1 - p0, p1), nrow = 2, byrow = TRUE)
-  proba_hvCpG_vec <- c(1 - alpha, alpha)
-
-  log_P_Mj <- 0
-
-  for (k in datasets) {
-    Mij_vals <- as.numeric(Mdf[, dataset_groups[[k]], drop = FALSE])
-    if (length(Mij_vals) < minind || all(is.na(Mij_vals))) next
-
-    # Precompute mean and SDs
-    mu_jk <- mean(Mij_vals, na.rm = TRUE)
-
-    ## Cal precomputed sds for both cases
-    params =  ds_params[k, ]
-
-    # Vectorized density
-    norm_probs <- matrix(0, nrow = length(Mij_vals), ncol = 2)
-    norm_probs[,1] <- dnorm(Mij_vals, mu_jk, params$sd0)
-    norm_probs[,2] <- dnorm(Mij_vals, mu_jk, params$sd1)
-
-    # Compute zjk_probs safely
-    zjk_probs <- array(0, dim = c(length(Mij_vals), 2, 2))
-    for (zjk in 0:1) {
-      zjk_probs[,, zjk+1] <- cbind(
-        norm_probs[, zjk+1] * p0p1_mat[zjk+1,1],
-        norm_probs[, zjk+1] * p0p1_mat[zjk+1,2]
-      )
-    }
-
-    # Sum across latent states and mixture
-    col_sums <- apply(zjk_probs, c(1,2), sum)
-
-    # dataset_loglik <- sum(log(rowSums(col_sums %*% proba_hvCpG_vec))) # old
-    ############# new July 2026
-    vals <- log(rowSums(col_sums %*% proba_hvCpG_vec))
-    vals <- vals[is.finite(vals)]
-
-    dataset_loglik <- if (length(vals) > 0) mean(vals) else NA_real_
-    if (!is.finite(dataset_loglik)) dataset_loglik <- 0
-    ###################
-
-    if (!is.finite(dataset_loglik)) dataset_loglik <- 0
-
-    log_P_Mj <- log_P_Mj + dataset_loglik
-  }
-
-  return(log_P_Mj)
-}
-
-#' Estimate the optimal alpha value for one CpG
-#'
-#' Performs a coarse grid search followed by local refinement using
-#' Brent optimization to find the alpha value (probability of hypervariability)
-#' that maximises the log-likelihood for a single CpG.
-#'
-#' @param Mdf Numeric matrix (1 CpG x samples). Methylation values for a single CpG.
-#' @param metadata Data frame containing `sample` and `dataset` columns.
-#' @param dataset_groups Named list mapping dataset names to row indices in `metadata`.
-#' @param ds_params Data frame with precomputed parameters per dataset:
-#'   columns `sd0`, `sd1`, and rownames corresponding to dataset names.
-#' @param p0,p1 Numeric scalars: True negative and true positive rates.
-#' @param minind Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).
-#'
-#' @return Numeric scalar: estimated optimal alpha for the CpG.
-#' @export
-#'
-#' @importFrom stats optim
-runOptim1CpG_gridrefine <- function(Mdf, metadata, dataset_groups, ds_params, p0, p1, minind) {
-  # Step 1. Coarse grid search (0, 0.05, 0.1...)
-  grid <- seq(0, 1, length.out = 21)
-  logliks <- vapply(grid, function(a) {
-    getLogLik_oneCpG_optimized_fast(Mdf, metadata, dataset_groups, ds_params, p0, p1, a, minind)
-  }, numeric(1))
-
-  best_idx <- which.max(logliks)
-  alpha_start <- grid[best_idx]
-
-  # Step 2. Local refinement with Brent, only in neighborhood
-  lower <- ifelse(best_idx == 1, 0, grid[best_idx - 1])
-  upper <- ifelse(best_idx == length(grid), 1, grid[best_idx + 1])
-
-  resOpt <- optim(
-    par = alpha_start,
-    fn = function(alpha) {
-      getLogLik_oneCpG_optimized_fast(Mdf, metadata, dataset_groups, ds_params, p0, p1, alpha, minind)
-    },
-    method = "Brent",
-    lower = lower, upper = upper,
-    control = list(fnscale = -1)
-  )
-  return(resOpt$par)
-}
-
 #' Optimize alpha values for multiple CpGs in parallel (HDF5 batched loading)
 #'
 #' Loads CpG methylation data from an HDF5 matrix in batches, and computes
@@ -133,6 +14,7 @@ runOptim1CpG_gridrefine <- function(Mdf, metadata, dataset_groups, ds_params, p0
 #' @param batch_size Integer; number of CpGs per HDF5 batch.
 #' @param Nds Integer; minimum number of datasets required to compute a CpG (default 3).
 #' @param minind Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).
+#' @param alpha0 Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.
 #'
 #' @return A numeric matrix with one column (`alpha`) and rownames equal to CpG IDs.
 #'
@@ -142,7 +24,8 @@ runOptim1CpG_gridrefine <- function(Mdf, metadata, dataset_groups, ds_params, p0
 #' @importFrom rhdf5 h5read
 #' @importFrom stats setNames
 #' @importFrom parallel mclapply
-getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, prep, batch_size, Nds, minind) {
+getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, prep,
+                                                 batch_size, Nds, minind, alpha0 = 0.01) {
   metadata       <- prep$metadata
   cpg_names_all  <- prep$cpg_names_all
   h5file         <- prep$h5file
@@ -268,9 +151,9 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
         if (length(datasets_present) < Nds) return(NA_real_)
 
         tryCatch(
-          runOptim1CpG_gridrefine(Mdf = Mdf, metadata = metadata,
-                                  dataset_groups = dataset_groups,
-                                  ds_params = ds_params, p0 = p0, p1 = p1, minind = minind),
+          posterior_hv_1CpG(Mdf = Mdf, metadata = metadata,
+                            dataset_groups = dataset_groups, ds_params = ds_params,
+                            p0 = p0, p1 = p1, minind = minind, alpha0 = alpha0),
           error = function(e) NA_real_
         )
       })
@@ -286,7 +169,7 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
   # Build final matrix
   my_matrix <- matrix(all_results_vec, ncol = 1)
   rownames(my_matrix) <- cpg_names_vec
-  colnames(my_matrix) <- "alpha"
+  colnames(my_matrix) <- "post_hv"      # was "alpha" in previous version
 
   return(my_matrix)
 }
@@ -313,6 +196,7 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
 #'   is used. Otherwise, a subset of the metadata can be provided to restrict
 #'   the analysis to specific samples or datasets.
 #' @param minind Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).
+#' @param alpha0 Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.
 #'
 #' @return Invisibly returns the result matrix (CpG x alpha).
 #'   The function also saves an `.RData` file to `resultDir` unless `skipsave = TRUE`.
@@ -321,14 +205,13 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
 runAndSave_fast <- function(
     analysis, cpg_names_vec, resultDir, NCORES, p0, p1,
     overwrite = FALSE, batch_size = 10000, dataDir,
-    skipsave = FALSE, Nds = 3, subsetMetadata = FALSE, minind = 3
-) {
+    skipsave = FALSE, Nds = 3, subsetMetadata = FALSE, minind = 3, alpha0 = 0.01) {
   t <- Sys.time()
   prep <- prepData(analysis, dataDir, subsetMetadata)
   message("Preparing the data took ", round(Sys.time() - t), " seconds")
 
   obj_name <- paste0("results_", analysis, "_", length(cpg_names_vec),
-                     "CpGs_", p0, "p0_", p1, "p1")
+                     "CpGs_", p0, "p0_", p1, "p1_", alpha0, "a0")
   obj_name <- gsub("[^[:alnum:]_]", "_", obj_name)
 
   resultDir <- normalizePath(resultDir, mustWork = FALSE)
@@ -346,7 +229,8 @@ runAndSave_fast <- function(
   # Run batch + parallel processing
   result <- getAllOptimAlpha_parallel_batch_fast(
     cpg_names_vec = cpg_names_vec, NCORES = NCORES,
-    p0 = p0, p1 = p1, prep = prep, batch_size = batch_size, Nds = Nds, minind = minind
+    p0 = p0, p1 = p1, prep = prep, batch_size = batch_size,
+    Nds = Nds, minind = minind, alpha0 = alpha0
   )
 
   if (!skipsave) {
@@ -356,4 +240,127 @@ runAndSave_fast <- function(
   }
 
   invisible(result)
+}
+
+#' Compute CpG-level hv marginal log-likelihood (hierarchical, 3-level)
+#'
+#' Evaluates the marginal log-likelihood of one CpG's methylation data under a
+#' three-level hierarchical model, for a given value of `alpha`:
+#'
+#' \itemize{
+#'   \item \strong{Z} (CpG level): the CpG is hypervariable (Z=1) with prior
+#'     probability `alpha`, or not (Z=0) with probability `1 - alpha`. There is a
+#'     single Z shared by all datasets.
+#'   \item \strong{Z_k} (dataset level): given Z, each dataset independently is in
+#'     its hv state with probability `p1` (if Z=1) or `1 - p0` (if Z=0). Datasets
+#'     are conditionally independent \emph{given Z}, so their evidence is
+#'     multiplied only inside each Z-branch.
+#'   \item \strong{M_ik} (individual level): given Z_k, each individual's value is
+#'     drawn from a Normal with SD `sd0` (stable) or `sd1 = lambda * sd0` (hv).
+#' }
+#'
+#' The CpG-level indicator Z is marginalised \strong{once}, at the top:
+#' \deqn{P(M) = \alpha \prod_k [p_1 d^1_k + (1-p_1) d^0_k]
+#'            + (1-\alpha) \prod_k [(1-p_0) d^1_k + p_0 d^0_k]}
+#' where \eqn{d^1_k}, \eqn{d^0_k} are the products over individuals in dataset k of
+#' the hv / stable Normal densities. Because `alpha` multiplies the whole product
+#' over datasets (rather than entering per individual or per dataset), a large
+#' dataset contributes a single confident dataset-level factor rather than one
+#' vote per sample: this removes the sample-size (N) dominance of the older
+#' summed-per-individual likelihood while keeping each dataset's full within-set
+#' power. Note the per-CpG MLE of `alpha` is typically at the boundary (0 or 1);
+#' informative in-between values come from estimating `alpha` across CpGs
+#' (e.g. empirical Bayes), not from a single CpG.
+#'
+#'   Not used by the default pipeline (which reports posteriors via
+#'   `posterior_hv_1CpG`); provided for empirical-Bayes estimation of the global
+#'   prior `alpha0` by maximising the summed log-likelihood across CpGs.
+#'
+#' @param Mdf Numeric matrix (1 CpG x samples): methylation values for one CpG.
+#' @param metadata Data frame with a `dataset` column (and `sample`).
+#' @param dataset_groups Named list mapping dataset names to column indices of `Mdf`.
+#' @param ds_params Data frame (rownames = dataset names) with columns `sd0`, `sd1`.
+#' @param p0 Numeric scalar: Pr(Z_k = 0 | Z = 0), the true-negative rate at the
+#'   dataset level (e.g. 0.95).
+#' @param p1 Numeric scalar: Pr(Z_k = 1 | Z = 1), the true-positive rate at the
+#'   dataset level (e.g. 0.65).
+#' @param alpha Numeric scalar in (0, 1): prior probability that the CpG is hv
+#'   (the value being optimised).
+#' @param minind Integer: minimum non-missing individuals a dataset must have to
+#'   contribute (datasets below this are skipped).
+#'
+#' @return Numeric scalar: the marginal log-likelihood \eqn{\log P(M)} for this
+#'   CpG at the given `alpha`. Returns `NA_real_` if no dataset met `minind`.
+#'
+#' @importFrom stats dnorm
+#' @export
+
+getLogLik_oneCpG_hierarchical <- function(Mdf, metadata, dataset_groups, ds_params,
+                                          p0, p1, alpha, minind) {
+  datasets <- unique(metadata$dataset)
+  alpha <- min(max(alpha, 1e-9), 1 - 1e-9)
+
+  # accumulate the TWO branch log-products across datasets (log d1_k, log d0_k combined)
+  logbranch1 <- 0   # sum_k log[ p1*d1_k + (1-p1)*d0_k ]   (given Z=1)
+  logbranch0 <- 0   # sum_k log[ (1-p0)*d1_k + p0*d0_k ]   (given Z=0)
+  n_used <- 0L
+
+  for (k in datasets) {
+    v <- as.numeric(Mdf[, dataset_groups[[k]], drop = FALSE]); v <- v[is.finite(v)]
+    if (length(v) < minind) next
+    mu <- mean(v); pr <- ds_params[k, ]
+
+    logd1_k <- sum(dnorm(v, mu, pr$sd1, log = TRUE))   # log d1_k  (Z_k = 1)
+    logd0_k <- sum(dnorm(v, mu, pr$sd0, log = TRUE))   # log d0_k  (Z_k = 0)
+
+    # log[ p1*d1_k + (1-p1)*d0_k ]  via log-sum-exp
+    m1 <- max(logd1_k, logd0_k)
+    logbranch1 <- logbranch1 + m1 +
+      log(p1 * exp(logd1_k - m1) + (1 - p1) * exp(logd0_k - m1))
+
+    # log[ (1-p0)*d1_k + p0*d0_k ]
+    logbranch0 <- logbranch0 + m1 +
+      log((1 - p0) * exp(logd1_k - m1) + p0 * exp(logd0_k - m1))
+
+    n_used <- n_used + 1L
+  }
+  if (n_used == 0L) return(NA_real_)
+
+  # marginalise the CpG-level Z ONCE, at the top:  log[ alpha*B1 + (1-alpha)*B0 ]
+  M <- max(logbranch1, logbranch0)
+  M + log(alpha * exp(logbranch1 - M) + (1 - alpha) * exp(logbranch0 - M))
+}
+
+#' Posterior probability that one CpG is hypervariable (hierarchical model)
+#'
+#' Computes P(Z=1 | M) for a single CpG under the 3-level hierarchical model,
+#' given a global prior `alpha0` = genome-wide baseline rate of hv CpGs.
+#' Returns ONE value per CpG in (0,1). Unlike a per-CpG MLE of alpha (which is
+#' degenerate at 0/1 for this model), the posterior is graded and interpretable
+#' as "given this CpG's data, the probability it is hv".
+#'
+#' @param alpha0 Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.
+#' @inheritParams getLogLik_oneCpG_hierarchical
+#' @return Numeric scalar in (0,1); NA if no dataset met `minind`.
+#' @importFrom stats dnorm
+#' @export
+posterior_hv_1CpG <- function(Mdf, metadata, dataset_groups, ds_params,
+                              p0, p1, minind, alpha0 = 0.01) {
+  lb1 <- 0; lb0 <- 0; n_used <- 0L
+  for (k in unique(metadata$dataset)) {
+    v <- as.numeric(Mdf[, dataset_groups[[k]], drop = FALSE]); v <- v[is.finite(v)]
+    if (length(v) < minind) next
+    mu <- mean(v); pr <- ds_params[k, ]
+    logd1 <- sum(dnorm(v, mu, pr$sd1, log = TRUE))   # log d1_k (Z_k = 1)
+    logd0 <- sum(dnorm(v, mu, pr$sd0, log = TRUE))   # log d0_k (Z_k = 0)
+    m <- max(logd1, logd0)
+    lb1 <- lb1 + m + log(p1     * exp(logd1 - m) + (1 - p1) * exp(logd0 - m))
+    lb0 <- lb0 + m + log((1-p0) * exp(logd1 - m) +  p0     * exp(logd0 - m))
+    n_used <- n_used + 1L
+  }
+  if (n_used == 0L) return(NA_real_)
+  la1 <- log(alpha0)     + lb1     # log[ alpha0   * B1 ]
+  la0 <- log(1 - alpha0) + lb0     # log[ (1-alpha0)* B0 ]
+  m <- max(la1, la0)
+  exp(la1 - m) / (exp(la1 - m) + exp(la0 - m))   # P(Z=1 | M), in (0,1)
 }

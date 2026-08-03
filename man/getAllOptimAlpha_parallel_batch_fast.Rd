@@ -12,7 +12,8 @@ getAllOptimAlpha_parallel_batch_fast(
   prep,
   batch_size,
   Nds,
-  minind
+  minind,
+  alpha0 = 0.01
 )
 }
 \arguments{
@@ -29,6 +30,8 @@ getAllOptimAlpha_parallel_batch_fast(
 \item{Nds}{Integer; minimum number of datasets required to compute a CpG (default 3).}
 
 \item{minind}{Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).}
+
+\item{alpha0}{Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.}
 }
 \value{
 A numeric matrix with one column (\code{alpha}) and rownames equal to CpG IDs.

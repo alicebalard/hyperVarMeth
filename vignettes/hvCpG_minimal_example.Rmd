@@ -23,6 +23,25 @@ out.width = "100%" # make the figure scale to container width
 `%>%` <- magrittr::`%>%`
 ```
 
+## The model in brief
+
+For each CpG, `hyperVarMeth` estimates the **posterior probability that the site is
+hypervariable (hv)** across people: `P(Z = 1 | data)`, a value in (0, 1). The model
+is hierarchical with three levels:
+
+- **CpG level (Z):** the CpG is hv (Z = 1) with global prior probability `alpha0`,
+  or not (Z = 0). There is a single Z shared by all datasets.
+- **Dataset level (Z_k):** given Z, each dataset shows the hv pattern with
+  probability `p1` (if hv) or slips into looking hv with probability `1 - p0`
+  (if not). Datasets are independent *given Z*.
+- **Individual level:** given a dataset's state, each person's methylation is a
+  draw from a narrow (stable, `sd0`) or wide (hv, `sd1 = lambda * sd0`) Normal.
+
+Because a single CpG's data usually points clearly one way once the dataset
+evidences are combined, the per-CpG **posterior** (not a maximum-likelihood
+`alpha`) is the meaningful graded output. It depends on the global prior
+`alpha0`, which sets the genome-wide baseline rate of hv CpGs.
+
 ## 1. Create a mock methylation dataset
 
 ```{r}
@@ -45,7 +64,7 @@ str(prep)
 prep contains:
 
 - metadata: sample and dataset information
-- medsd_lambdas: dataset-level parameters
+- medsd_lambdas: dataset-level parameters (`median_sd`, `lambda`)
 - cpg_names_all: all CpG names
 - h5file: path to HDF5 methylation matrix
 
@@ -77,79 +96,113 @@ ggplot2::ggplot(mat_df, ggplot2::aes(x = Beta, group = dataset, fill = dataset))
 
 ```{r}
 result <- local({
-  tmp_dir <- withr::local_tempdir(pattern = "tmp_vignette") ## 
-  
+  tmp_dir <- withr::local_tempdir(pattern = "tmp_vignette")
+
   hyperVarMeth::runAndSave_fast(
     analysis = "mock",
     cpg_names_vec = prep$cpg_names_all,
     resultDir = tmp_dir,
     NCORES = 1,
-    p0 = 0.8,
-    p1 = 0.65,
+    p0 = 0.95,          # Pr(dataset looks non-hv | CpG not hv)
+    p1 = 0.65,          # Pr(dataset looks hv     | CpG hv)
+    alpha0 = 0.05,      # global prior: genome-wide baseline rate of hv CpGs
     dataDir = data_dir,
     batch_size = 100,
     skipsave = FALSE
   )
-  
+
   result_files <- list.files(tmp_dir, pattern = "results_mock.*\\.rds$")
   if (length(result_files) == 0) stop("No results file generated!")
-  
+
   # Read the first results file into an R object
   res <- readRDS(file.path(tmp_dir, result_files[1]))
-  
-  # Return only the result object, tmp_dir and files deleted on block exit
+
+  # Return only the result object; tmp_dir and files deleted on block exit
   res
 })
 ```
 
-This will compute the optimal alpha values for all CpGs in the mock dataset and save the result to tmp_dir.
+This computes the posterior probability of being hv (`post_hv`) for every CpG in
+the mock dataset and saves the result to `tmp_dir`. The `alpha0` prior shifts all
+posteriors up or down; here we use 0.05 (a plausible genome-wide baseline).
 
-## 4. Inspect Results
+## 4. Inspect results
 
 ### Check the first few results
 ```{r}
 head(result)
 ```
-You should see a matrix of CpGs (rows) and their estimated alpha values.
+
+The result is a matrix of CpGs (rows) with a single `post_hv` column: the
+posterior probability P(hv | data), between 0 and 1.
 
 ```{r}
-ggplot2::ggplot(result, ggplot2::aes(x=alpha)) +
-  ggplot2::geom_histogram() +
+ggplot2::ggplot(data.frame(post_hv = result[, "post_hv"]),
+                ggplot2::aes(x = post_hv)) +
+  ggplot2::geom_histogram(bins = 30, colour = "black", fill = "grey70") +
+  ggplot2::geom_vline(xintercept = 0.5, linetype = 2) +
+  ggplot2::scale_x_continuous(limits = c(0, 1)) +
+  ggplot2::labs(x = "Posterior P(hv | data)", y = "CpGs") +
   ggplot2::theme_minimal(base_size = 14)
 ```
 
-### Plot sd of raw values for an extremely stable, a mid variable and an extremely variable CpG
+Most CpGs sit near 0 (confidently non-hv); a minority push toward 1 (candidate
+hvCpGs). The exact spread depends on `alpha0` and on how separable the mock
+stable/hv datasets are.
+
+### Compare a stable, a mid, and a variable CpG
 
 ```{r}
-sta <- rownames(result)[which(result %in% min(result))[1]]
+post <- result[, "post_hv"]
 
-idx_mid <- which.min(abs(result - 0.5))
-mid <- rownames(result)[idx_mid]
+# lowest, closest-to-0.5, and highest posterior CpGs
+sta <- rownames(result)[which.min(post)]
+mid <- rownames(result)[which.min(abs(post - 0.5))]
+var <- rownames(result)[which.max(post)]
 
-var <- rownames(result)[which(result %in% max(result))[1]]
+# their posteriors
+result[match(c(sta, mid, var), rownames(result)), , drop = FALSE]
 
-mat_df <- mat_df %>%
-  dplyr::filter(CpG %in% c(sta, mid,var)) %>%
+sd_df <- mat_df %>%
+  dplyr::filter(CpG %in% c(sta, mid, var)) %>%
   dplyr::group_by(dataset, CpG) %>%
-  dplyr::summarise(range = max(Beta, na.rm=TRUE)-min(Beta, na.rm=TRUE),
-                   sd = sd(Beta, na.rm=TRUE),
-                   n = sum(!is.na(Beta)))
+  dplyr::summarise(range = max(Beta, na.rm = TRUE) - min(Beta, na.rm = TRUE),
+                   sd = sd(Beta, na.rm = TRUE),
+                   n = sum(!is.na(Beta)), .groups = "drop")
 
-result[match(c(sta, mid,var), row.names(result)),]
+sd_df$CpG <- factor(sd_df$CpG, levels = c(sta, mid, var),
+                    labels = c("stable (low P)", "mid (P~0.5)", "variable (high P)"))
 
-ggplot2::ggplot(mat_df[mat_df$CpG %in% c(sta, mid, var),], ggplot2::aes(x=dataset, y = sd))+
-  ggplot2::geom_col(ggplot2::aes(fill=CpG), position = "dodge")+
-  ggplot2::theme_minimal(base_size = 14)+
-  ggplot2::coord_cartesian(ylim = c(0,1))+
-  ggplot2::ggtitle("a hyper variable CpG") +
-  ggplot2::scale_fill_viridis_d() 
+ggplot2::ggplot(sd_df, ggplot2::aes(x = dataset, y = sd, fill = CpG)) +
+  ggplot2::geom_col(position = "dodge") +
+  ggplot2::coord_cartesian(ylim = c(0, 1)) +
+  ggplot2::scale_fill_viridis_d() +
+  ggplot2::labs(title = "Per-dataset SD for a stable, mid, and variable CpG",
+                x = "Dataset", y = "SD of Beta") +
+  ggplot2::theme_minimal(base_size = 14)
 ```
+
+The high-posterior CpG should show larger per-dataset spread across most datasets;
+the low-posterior one should be tight everywhere. A `post_hv` near 0.5 means the
+evidence is genuinely ambiguous given the prior.
+
+### Sensitivity to the prior `alpha0` (optional)
+
+Because `post_hv` depends on the global prior, it is worth checking that the
+*ranking* of CpGs is stable even as absolute values shift with `alpha0`. Re-run
+section 3 with `alpha0 = 0.01` and `alpha0 = 0.1` and compare
+`rank(post_hv)` — the ordering should be largely preserved even though the
+histogram moves.
 
 ## Notes
 
-For real datasets, increase batch_size and NCORES appropriately.
+For real datasets, increase `batch_size` and `NCORES` appropriately.
 
-Use skipsave = TRUE if you do not want to write files to disk during testing.
+Use `skipsave = TRUE` if you do not want to write files to disk during testing.
 
-This vignette demonstrates the minimal workflow using mock data to ensure everything runs before applying to large-scale datasets.
+`alpha0` is a genuine modelling input (the genome-wide prior probability that any
+CpG is hv), not estimated per CpG — set it from your expected hv rate and report
+the value used, since every posterior depends on it.
 
+This vignette demonstrates the minimal workflow using mock data to ensure
+everything runs before applying to large-scale datasets.
