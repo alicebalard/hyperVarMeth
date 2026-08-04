@@ -34,10 +34,13 @@ getAllOptimAlpha_parallel_batch_fast(
 \item{alpha0}{Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.}
 }
 \value{
-A numeric matrix with one column (\code{alpha}) and rownames equal to CpG IDs.
+A numeric matrix with columns
+\code{c("post_hv","logBF","logBF_per_ds","n_hv_ds","n_ds","lambda_hat")}
+and rownames equal to CpG IDs. See \code{\link[=posterior_hv_1CpG]{posterior_hv_1CpG()}} for column meanings.
+For ranking CpGs use \code{logBF_per_ds} or \code{n_hv_ds}, not \code{post_hv} (which saturates).
 }
 \description{
 Loads CpG methylation data from an HDF5 matrix in batches, and computes
-the optimal alpha value for each CpG using parallel processing across cores.
+per-CpG hypervariability scores using parallel processing across cores.
 Designed for large-scale hvCpG detection in datasets such as Atlas10X.
 }

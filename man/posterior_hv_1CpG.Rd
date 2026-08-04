@@ -2,7 +2,7 @@
 % Please edit documentation in R/hvCpGDetection.R
 \name{posterior_hv_1CpG}
 \alias{posterior_hv_1CpG}
-\title{Posterior probability that one CpG is hypervariable (hierarchical model)}
+\title{Per-CpG hypervariability scores (hierarchical model)}
 \usage{
 posterior_hv_1CpG(
   Mdf,
@@ -33,15 +33,30 @@ dataset level (e.g. 0.65).}
 \item{minind}{Integer: minimum non-missing individuals a dataset must have to
 contribute (datasets below this are skipped).}
 
-\item{alpha0}{Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.}
+\item{alpha0}{Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.
+Only shifts \code{post_hv}; the other scores do not depend on it.}
 }
 \value{
-Numeric scalar in (0,1); NA if no dataset met \code{minind}.
+Named numeric vector of length 6 (see Details); all \code{NA} if no dataset
+met \code{minind}.
 }
 \description{
-Computes P(Z=1 | M) for a single CpG under the 3-level hierarchical model,
-given a global prior \code{alpha0} = genome-wide baseline rate of hv CpGs.
-Returns ONE value per CpG in (0,1). Unlike a per-CpG MLE of alpha (which is
-degenerate at 0/1 for this model), the posterior is graded and interpretable
-as "given this CpG's data, the probability it is hv".
+Computes a set of complementary per-CpG scores under the 3-level hierarchical
+model. The headline posterior \code{post_hv} = P(Z=1 | data) saturates near 0/1
+when many datasets/individuals point at the same yes/no question; the other
+columns expose the underlying continuous evidence so you get a graded score.
+}
+\details{
+Returned values (a named length-6 numeric vector):
+\describe{
+\item{post_hv}{Posterior P(Z=1 | data), in (0,1). Saturates; use for a hard call.}
+\item{logBF}{Log Bayes factor (lb1 - lb0): continuous strength of evidence for hv.}
+\item{logBF_per_ds}{logBF divided by the number of contributing datasets.
+Comparable ACROSS CpGs with different coverage — use this for ranking.}
+\item{n_hv_ds}{Expected number of datasets in which the CpG looks hv (0..K).
+Most interpretable score: "in how many datasets is it hypervariable".}
+\item{n_ds}{Number of datasets that contributed (>= minind individuals).}
+\item{lambda_hat}{Crude, unshrunken effect size = sqrt(variance excess over
+baseline sd0): "how much more variable than expected".}
+}
 }

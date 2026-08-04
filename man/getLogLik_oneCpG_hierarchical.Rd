@@ -70,7 +70,7 @@ power. Note the per-CpG MLE of \code{alpha} is typically at the boundary (0 or 1
 informative in-between values come from estimating \code{alpha} across CpGs
 (e.g. empirical Bayes), not from a single CpG.
 
-Not used by the default pipeline (which reports posteriors via
+Not used by the default pipeline (which reports scores via
 \code{posterior_hv_1CpG}); provided for empirical-Bayes estimation of the global
 prior \code{alpha0} by maximising the summed log-likelihood across CpGs.
 }
