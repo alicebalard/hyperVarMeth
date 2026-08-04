@@ -1,10 +1,89 @@
 ## hvCpG algorithm (batched HDF5 loading)
 ## Alice Balard
 
+## Output columns produced per CpG (see posterior_hv_1CpG):
+##   post_hv      posterior P(Z=1 | data); saturates near 0/1, good for a hard call
+##   logBF        log Bayes factor (lb1 - lb0); continuous strength of evidence
+##   logBF_per_ds logBF / n_ds; comparable ACROSS CpGs with different coverage (use for ranking)
+##   n_hv_ds      expected number of datasets in which the CpG looks hv (0..K); most interpretable
+##   n_ds         number of datasets that contributed
+##   lambda_hat   crude effect size: sqrt(variance excess / baseline); "how much more variable"
+RESULT_COLS <- c("post_hv", "logBF", "logBF_per_ds", "n_hv_ds", "n_ds", "lambda_hat")
+
+#' Per-CpG hypervariability scores (hierarchical model)
+#'
+#' Computes a set of complementary per-CpG scores under the 3-level hierarchical
+#' model. The headline posterior `post_hv` = P(Z=1 | data) saturates near 0/1
+#' when many datasets/individuals point at the same yes/no question; the other
+#' columns expose the underlying continuous evidence so you get a graded score.
+#'
+#' Returned values (a named length-6 numeric vector):
+#' \describe{
+#'   \item{post_hv}{Posterior P(Z=1 | data), in (0,1). Saturates; use for a hard call.}
+#'   \item{logBF}{Log Bayes factor (lb1 - lb0): continuous strength of evidence for hv.}
+#'   \item{logBF_per_ds}{logBF divided by the number of contributing datasets.
+#'     Comparable ACROSS CpGs with different coverage — use this for ranking.}
+#'   \item{n_hv_ds}{Expected number of datasets in which the CpG looks hv (0..K).
+#'     Most interpretable score: "in how many datasets is it hypervariable".}
+#'   \item{n_ds}{Number of datasets that contributed (>= minind individuals).}
+#'   \item{lambda_hat}{Crude, unshrunken effect size = sqrt(variance excess over
+#'     baseline sd0): "how much more variable than expected".}
+#' }
+#'
+#' @param alpha0 Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.
+#'   Only shifts `post_hv`; the other scores do not depend on it.
+#' @inheritParams getLogLik_oneCpG_hierarchical
+#' @return Named numeric vector of length 6 (see Details); all `NA` if no dataset
+#'   met `minind`.
+#' @importFrom stats dnorm
+#' @export
+posterior_hv_1CpG <- function(Mdf, metadata, dataset_groups, ds_params,
+                              p0, p1, minind, alpha0 = 0.01) {
+  na_out <- stats::setNames(rep(NA_real_, 6L),
+                            c("post_hv","logBF","logBF_per_ds","n_hv_ds","n_ds","lambda_hat"))
+
+  lb1 <- 0; lb0 <- 0; n_used <- 0L
+  soft_k <- 0    # expected number of datasets that "look hv"
+  ss <- 0        # accumulated scale-free variance excess (for lambda_hat)
+  dfree <- 0     # accumulated degrees of freedom
+
+  for (k in unique(metadata$dataset)) {
+    v <- as.numeric(Mdf[, dataset_groups[[k]], drop = FALSE]); v <- v[is.finite(v)]
+    if (length(v) < minind) next
+    pr <- ds_params[k, ]
+    if (!isTRUE(is.finite(pr$sd0) && is.finite(pr$sd1))) next  # dataset absent from medsd_lambdas
+    mu <- mean(v)
+
+    logd1 <- sum(dnorm(v, mu, pr$sd1, log = TRUE))   # log d1_k (Z_k = 1)
+    logd0 <- sum(dnorm(v, mu, pr$sd0, log = TRUE))   # log d0_k (Z_k = 0)
+    m <- max(logd1, logd0)
+
+    lb1 <- lb1 + m + log(p1     * exp(logd1 - m) + (1 - p1) * exp(logd0 - m))
+    lb0 <- lb0 + m + log((1-p0) * exp(logd1 - m) +  p0     * exp(logd0 - m))
+
+    soft_k <- soft_k + 1 / (1 + exp(-(logd1 - logd0)))  # Pr(dataset k looks hv)
+    ss     <- ss + sum((v - mu)^2) / pr$sd0^2           # scale-free variance excess
+    dfree  <- dfree + (length(v) - 1L)
+
+    n_used <- n_used + 1L
+  }
+  if (n_used == 0L) return(na_out)
+
+  logBF <- lb1 - lb0
+  lo    <- log(alpha0) - log1p(-alpha0) + logBF   # logit(post) = logit(alpha0) + logBF
+
+  c(post_hv      = 1 / (1 + exp(-lo)),
+    logBF        = logBF,
+    logBF_per_ds = logBF / n_used,
+    n_hv_ds      = soft_k,
+    n_ds         = n_used,
+    lambda_hat   = if (dfree > 0) sqrt(ss / dfree) else NA_real_)
+}
+
 #' Optimize alpha values for multiple CpGs in parallel (HDF5 batched loading)
 #'
 #' Loads CpG methylation data from an HDF5 matrix in batches, and computes
-#' the optimal alpha value for each CpG using parallel processing across cores.
+#' per-CpG hypervariability scores using parallel processing across cores.
 #' Designed for large-scale hvCpG detection in datasets such as Atlas10X.
 #'
 #' @param cpg_names_vec Character vector of CpG identifiers to analyse.
@@ -16,7 +95,10 @@
 #' @param minind Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).
 #' @param alpha0 Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.
 #'
-#' @return A numeric matrix with one column (`alpha`) and rownames equal to CpG IDs.
+#' @return A numeric matrix with columns
+#'   `c("post_hv","logBF","logBF_per_ds","n_hv_ds","n_ds","lambda_hat")`
+#'   and rownames equal to CpG IDs. See [posterior_hv_1CpG()] for column meanings.
+#'   For ranking CpGs use `logBF_per_ds` or `n_hv_ds`, not `post_hv` (which saturates).
 #'
 #' @export
 #'
@@ -30,6 +112,8 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
   cpg_names_all  <- prep$cpg_names_all
   h5file         <- prep$h5file
   medsd_lambdas  <- prep$medsd_lambdas
+
+  ncols <- length(RESULT_COLS)
 
   ## Precompute dataset-level parameters
   ds_params <- medsd_lambdas %>%
@@ -51,8 +135,9 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
     stop("Some CpG names not found in HDF5: ", paste(cpg_names_vec[is.na(cpg_indices)], collapse = ", "))
   }
 
-  # Initialize result vector (guaranteed correct length)
-  all_results_vec <- rep(NA_real_, length(cpg_indices))
+  # Initialize result matrix (guaranteed correct shape)
+  all_results <- matrix(NA_real_, nrow = length(cpg_indices), ncol = ncols,
+                        dimnames = list(cpg_names_vec, RESULT_COLS))
 
   # Split into batches
   batches <- split(cpg_indices, ceiling(seq_along(cpg_indices) / batch_size))
@@ -93,8 +178,8 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
     sample_idx <- match(metadata$sample, samples)
 
     if (anyNA(sample_idx)) {
-        stop("Some metadata samples not found in HDF5 samples: ",
-             paste(metadata$sample[is.na(sample_idx)], collapse=", "))
+      stop("Some metadata samples not found in HDF5 samples: ",
+           paste(metadata$sample[is.na(sample_idx)], collapse=", "))
     }
 
     M_batch <- M_batch[, sample_idx, drop = FALSE]
@@ -113,10 +198,6 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
     if (is.na(NCORES) || NCORES < 1) {
       message("!!Invalid NCORES (", NCORES, ") - defaulting to 1.")
       NCORES <- 1
-    }
-
-    if (is.null(nrows) || nrows == 0) {
-      next  # nothing to process
     }
 
     if (nrows == 1) {
@@ -141,44 +222,40 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
       }
     }
 
-    # Run in parallel over chunks
+    # Run in parallel over chunks; each CpG returns a length-6 numeric vector
     chunk_results <- mclapply(idx_split, function(idx) {
-      sapply(idx, function(i) {
+      vapply(idx, function(i) {
         Mdf <- M_batch[i, , drop = FALSE]
 
         # Require at least Nds datasets with data
         datasets_present <- unique(sample_to_dataset[colnames(Mdf)[!is.na(Mdf)]])
-        if (length(datasets_present) < Nds) return(NA_real_)
+        if (length(datasets_present) < Nds) return(rep(NA_real_, ncols))
 
-        tryCatch(
+        unname(tryCatch(
           posterior_hv_1CpG(Mdf = Mdf, metadata = metadata,
                             dataset_groups = dataset_groups, ds_params = ds_params,
                             p0 = p0, p1 = p1, minind = minind, alpha0 = alpha0),
-          error = function(e) NA_real_
-        )
-      })
+          error = function(e) rep(NA_real_, ncols)
+        ))
+      }, numeric(ncols))   # vapply returns ncols x length(idx) matrix
     }, mc.cores = NCORES)
 
-    batch_results <- unlist(chunk_results, use.names = FALSE)
+    # Each chunk is (ncols x n_cpg_in_chunk); bind columns then transpose to rows
+    batch_mat <- t(do.call(cbind, chunk_results))   # (n_cpg_in_batch x ncols)
 
     # Store results in correct positions
     pos_in_all <- match(row_batches, cpg_indices)
-    all_results_vec[pos_in_all] <- batch_results
+    all_results[pos_in_all, ] <- batch_mat
   }
 
-  # Build final matrix
-  my_matrix <- matrix(all_results_vec, ncol = 1)
-  rownames(my_matrix) <- cpg_names_vec
-  colnames(my_matrix) <- "post_hv"      # was "alpha" in previous version
-
-  return(my_matrix)
+  return(all_results)
 }
 
 #' Run the hvCpG algorithm and save results to file
 #'
 #' Top-level driver that orchestrates hvCpG detection:
-#' prepares data, runs the batched parallel optimisation over CpGs,
-#' and saves the resulting alpha estimates to disk.
+#' prepares data, runs the batched parallel scoring over CpGs,
+#' and saves the resulting score matrix to disk.
 #'
 #' @param analysis Character string. Name of the analysis.
 #'   If it contains `"MariasarraysREDUCED"`, a special directory structure is expected.
@@ -198,8 +275,8 @@ getAllOptimAlpha_parallel_batch_fast <- function(cpg_names_vec, NCORES, p0, p1, 
 #' @param minind Numeric scalar: Minimum number of individuals covered per dataset by CpG (default 3).
 #' @param alpha0 Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.
 #'
-#' @return Invisibly returns the result matrix (CpG x alpha).
-#'   The function also saves an `.RData` file to `resultDir` unless `skipsave = TRUE`.
+#' @return Invisibly returns the result matrix (CpG x score columns).
+#'   The function also saves an `.rds` file to `resultDir` unless `skipsave = TRUE`.
 #'
 #' @export
 runAndSave_fast <- function(
@@ -272,7 +349,7 @@ runAndSave_fast <- function(
 #' informative in-between values come from estimating `alpha` across CpGs
 #' (e.g. empirical Bayes), not from a single CpG.
 #'
-#'   Not used by the default pipeline (which reports posteriors via
+#'   Not used by the default pipeline (which reports scores via
 #'   `posterior_hv_1CpG`); provided for empirical-Bayes estimation of the global
 #'   prior `alpha0` by maximising the summed log-likelihood across CpGs.
 #'
@@ -294,7 +371,6 @@ runAndSave_fast <- function(
 #'
 #' @importFrom stats dnorm
 #' @export
-
 getLogLik_oneCpG_hierarchical <- function(Mdf, metadata, dataset_groups, ds_params,
                                           p0, p1, alpha, minind) {
   datasets <- unique(metadata$dataset)
@@ -308,7 +384,9 @@ getLogLik_oneCpG_hierarchical <- function(Mdf, metadata, dataset_groups, ds_para
   for (k in datasets) {
     v <- as.numeric(Mdf[, dataset_groups[[k]], drop = FALSE]); v <- v[is.finite(v)]
     if (length(v) < minind) next
-    mu <- mean(v); pr <- ds_params[k, ]
+    pr <- ds_params[k, ]
+    if (!isTRUE(is.finite(pr$sd0) && is.finite(pr$sd1))) next  # dataset absent from medsd_lambdas
+    mu <- mean(v)
 
     logd1_k <- sum(dnorm(v, mu, pr$sd1, log = TRUE))   # log d1_k  (Z_k = 1)
     logd0_k <- sum(dnorm(v, mu, pr$sd0, log = TRUE))   # log d0_k  (Z_k = 0)
@@ -329,38 +407,4 @@ getLogLik_oneCpG_hierarchical <- function(Mdf, metadata, dataset_groups, ds_para
   # marginalise the CpG-level Z ONCE, at the top:  log[ alpha*B1 + (1-alpha)*B0 ]
   M <- max(logbranch1, logbranch0)
   M + log(alpha * exp(logbranch1 - M) + (1 - alpha) * exp(logbranch0 - M))
-}
-
-#' Posterior probability that one CpG is hypervariable (hierarchical model)
-#'
-#' Computes P(Z=1 | M) for a single CpG under the 3-level hierarchical model,
-#' given a global prior `alpha0` = genome-wide baseline rate of hv CpGs.
-#' Returns ONE value per CpG in (0,1). Unlike a per-CpG MLE of alpha (which is
-#' degenerate at 0/1 for this model), the posterior is graded and interpretable
-#' as "given this CpG's data, the probability it is hv".
-#'
-#' @param alpha0 Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.
-#' @inheritParams getLogLik_oneCpG_hierarchical
-#' @return Numeric scalar in (0,1); NA if no dataset met `minind`.
-#' @importFrom stats dnorm
-#' @export
-posterior_hv_1CpG <- function(Mdf, metadata, dataset_groups, ds_params,
-                              p0, p1, minind, alpha0 = 0.01) {
-  lb1 <- 0; lb0 <- 0; n_used <- 0L
-  for (k in unique(metadata$dataset)) {
-    v <- as.numeric(Mdf[, dataset_groups[[k]], drop = FALSE]); v <- v[is.finite(v)]
-    if (length(v) < minind) next
-    mu <- mean(v); pr <- ds_params[k, ]
-    logd1 <- sum(dnorm(v, mu, pr$sd1, log = TRUE))   # log d1_k (Z_k = 1)
-    logd0 <- sum(dnorm(v, mu, pr$sd0, log = TRUE))   # log d0_k (Z_k = 0)
-    m <- max(logd1, logd0)
-    lb1 <- lb1 + m + log(p1     * exp(logd1 - m) + (1 - p1) * exp(logd0 - m))
-    lb0 <- lb0 + m + log((1-p0) * exp(logd1 - m) +  p0     * exp(logd0 - m))
-    n_used <- n_used + 1L
-  }
-  if (n_used == 0L) return(NA_real_)
-  la1 <- log(alpha0)     + lb1     # log[ alpha0   * B1 ]
-  la0 <- log(1 - alpha0) + lb0     # log[ (1-alpha0)* B0 ]
-  m <- max(la1, la0)
-  exp(la1 - m) / (exp(la1 - m) + exp(la0 - m))   # P(Z=1 | M), in (0,1)
 }

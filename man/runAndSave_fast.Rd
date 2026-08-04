@@ -53,11 +53,11 @@ the analysis to specific samples or datasets.}
 \item{alpha0}{Numeric in (0,1): global prior Pr(CpG is hv). Default 0.01.}
 }
 \value{
-Invisibly returns the result matrix (CpG x alpha).
-The function also saves an \code{.RData} file to \code{resultDir} unless \code{skipsave = TRUE}.
+Invisibly returns the result matrix (CpG x score columns).
+The function also saves an \code{.rds} file to \code{resultDir} unless \code{skipsave = TRUE}.
 }
 \description{
 Top-level driver that orchestrates hvCpG detection:
-prepares data, runs the batched parallel optimisation over CpGs,
-and saves the resulting alpha estimates to disk.
+prepares data, runs the batched parallel scoring over CpGs,
+and saves the resulting score matrix to disk.
 }
